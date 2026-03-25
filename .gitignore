@@ -1,0 +1,12 @@
+# Node / tooling
+node_modules/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Scan outputs
+tenants/**/latest.csv
+prowler/**

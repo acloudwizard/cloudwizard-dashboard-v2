@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CloudWizard Demo Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+ 
+  <!-- v2 shell/layout -->
+<link rel="stylesheet" href="/shared/styles.css" />
+<!-- v1 component styles -->
+<link rel="stylesheet" href="/shared/styles-v1.css" />
+
+  <script>
+    window.CWCONFIG = {
+      customerName: "DEMO",
+      environment: "DEMO",
+      dashboardTitle: "CloudWizard Security and Compliance Dashboard",
+      description: "Live demo of the CloudWizard dashboard using local Prowler CSV.",
+      csvUrl: "latest.csv"
+    };
+  </script>
+
+  <!-- existing rendering logic (triage, parser, renderOverview/renderCompliance) -->
+  <script src="/shared/render.js" defer></script>
+  <!-- new shell + wiring -->
+  <script src="/shared/app.js" defer></script>
+</head>
+<body>
+  <div class="cwAppBg">
+    <main id="cwDashboard" class="cwShell">
+      <section class="cwHero">
+        <div class="cwHeroPattern"></div>
+
+        <div class="cwHeroTop">
+          <div class="cwHeroLeft">
+            <button id="btnRequestScanCenter" type="button" class="cwBtnPrimary">
+              <span class="cwBtnIcon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                  <path d="M3 3v5h5"></path>
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+                  <path d="M16 16h5v5"></path>
+                </svg>
+              </span>
+              <span id="scanBtnText">Run New Scan</span>
+            </button>
+
+            <span class="cwHeroBadge" id="cwEnvironmentBadge">
+              DEMO
+            </span>
+          </div>
+
+          <div class="cwHeroRight">
+            <a href="https://acloudwizard.com" target="_blank" rel="noopener" class="cwBtnSecondary">
+              Main Site
+            </a>
+          </div>
+        </div>
+
+        <div class="cwHeroBottom">
+          <h1 id="cwDashboardTitle" class="cwHeroTitle">
+            CloudWizard Security Dashboard
+          </h1>
+          <p id="cwDashboardSubtitle" class="cwHeroSubtitle">
+            Live demo of the CloudWizard Security & Compliance Dashboard.
+          </p>
+        </div>
+
+        <div class="cwHeroCta">
+          <div class="cwHeroCtaText">
+            Book a free 30-minute call to understand your AWS security posture, what you're trying
+            to achieve, and whether you need a one-off review, a security dashboard, or ongoing
+            fractional CISO support.
+          </div>
+          <a
+            href="https://acloudwizard.com/the-cloud-strategy-fit-session/"
+            target="_blank"
+            rel="noopener"
+            class="cwBtnAccent"
+          >
+            Book a Call
+          </a>
+        </div>
+      </section>
+
+      <nav class="cwTabs">
+        <button id="tabSummary" type="button" class="cwTab cwTabActive">
+          Summary
+        </button>
+        <button id="tabOverview" type="button" class="cwTab">
+          Security
+        </button>
+        <button id="tabCompliance" type="button" class="cwTab">
+          Compliance
+        </button>
+      </nav>
+
+      <section id="viewSummary" class="cwView">
+  <div id="viewSummaryInner"></div>
+</section>
+      <section id="viewOverview" class="cwView cwViewHidden"></section>
+      <section id="viewCompliance" class="cwView cwViewHidden"></section>
+    </main>
+  </div>
+
+  <div id="cwScanModal" class="cwModal" aria-hidden="true">
+    <div class="cwModalDialog" role="dialog" aria-modal="true" aria-labelledby="cwModalTitle">
+      <div class="cwModalIcon">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="8" r="1"></circle>
+          <line x1="12" y1="11" x2="12" y2="16"></line>
+          <line x1="12" y1="18" x2="12.01" y2="18"></line>
+        </svg>
+      </div>
+      <h3 id="cwModalTitle" class="cwModalTitle">
+        This is a Demo Environment
+      </h3>
+      <p class="cwModalText">
+        Because this is a synthetic showcase, no live scan will be initiated.
+      </p>
+      <p class="cwModalText">
+        Want to feel this secure about your own infrastructure? Let's connect and run a real
+        security audit on your AWS environment.
+      </p>
+      <div class="cwModalActions">
+        <button id="cwModalCancel" type="button" class="cwBtnGhost">
+          Close
+        </button>
+        <a
+          href="https://acloudwizard.com/the-cloud-strategy-fit-session/"
+          target="_blank"
+          rel="noopener"
+          class="cwBtnPrimary"
+        >
+          Book an Audit
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

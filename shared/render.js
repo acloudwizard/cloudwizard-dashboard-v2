@@ -1,0 +1,1452 @@
+/**
+ * CloudWizard Security Dashboard - Render Logic
+ * (Security Overview + Compliance Explorer + Triage + Charts)
+ */
+
+(function () {
+
+  // ------------------------------------------------------------------------
+  // 1. Utilities
+  // ------------------------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function norm(s) {
+    return String(s ?? "").trim().toLowerCase();
+  }
+
+  function debounce(fn, ms) {
+    let t = null;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  // ------------------------------------------------------------------------
+  // 2. Triage Engine (LocalStorage)
+  // ------------------------------------------------------------------------
+  const TRIAGE_STORE_KEY = "cw_triage_state";
+
+  function getTriageState() {
+    try {
+      return JSON.parse(localStorage.getItem(TRIAGE_STORE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveTriageState(state) {
+    localStorage.setItem(TRIAGE_STORE_KEY, JSON.stringify(state));
+  }
+
+  function getFindingId(r) {
+    return `${r.CHECK_ID}|${r.RESOURCE_UID}|${r.ACCOUNT_UID}`;
+  }
+
+  function updateTriage(findingId, status, notes) {
+    const state = getTriageState();
+    if (!status && !notes) {
+      delete state[findingId];
+    } else {
+      state[findingId] = {
+        status: status || "",
+        notes: notes || "",
+        updatedAt: new Date().toISOString()
+      };
+    }
+    saveTriageState(state);
+    window.dispatchEvent(new Event("cw-triage-updated"));
+  }
+
+  // ------------------------------------------------------------------------
+  // 3. Data Helpers
+  // ------------------------------------------------------------------------
+  function hydrateRowsWithMeta(rawRows) {
+    return rawRows.map((r) => {
+      r._findingId = r.CHECK_ID;
+      return r;
+    });
+  }
+
+  function groupMap(arr, keyFn) {
+    const m = new Map();
+    for (const item of arr) {
+      const k = keyFn(item) || "Other";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(item);
+    }
+    return m;
+  }
+
+  function countStatuses(rows) {
+    const c = { FAIL: 0, PASS: 0, MANUAL: 0, IGNORED: 0, INVESTIGATING: 0, PENDING: 0, FIXED: 0 };
+    const tState = getTriageState();
+
+    rows.forEach((r) => {
+      const s = String(r.STATUS || "").toUpperCase();
+      if (s === "FAIL") {
+        const ts = tState[getFindingId(r)];
+        if (ts && ts.status) {
+          const st = ts.status.toUpperCase();
+          if (c[st] !== undefined) c[st]++; else c.FAIL++;
+        } else {
+          c.FAIL++;
+        }
+      } else if (s in c) {
+        c[s]++;
+      }
+    });
+    return c;
+  }
+
+  function countSeverities(rows) {
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    const tState = getTriageState();
+
+    rows.forEach((r) => {
+      if (String(r.STATUS || "").toUpperCase() === "FAIL") {
+        const ts = tState[getFindingId(r)];
+        if (ts && (ts.status === "ignored" || ts.status === "fixed")) return;
+        const s = norm(r.SEVERITY);
+        if (s in counts) counts[s]++;
+      }
+    });
+    return counts;
+  }
+
+  function uniqueSorted(rows, key) {
+    const set = new Set();
+    rows.forEach((r) => {
+      const v = String(r[key] ?? "").trim();
+      if (v) set.add(v);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  function extractFrameworksFromCell(cell) {
+    const s = String(cell ?? "").trim();
+    if (!s) return [];
+    return s
+      .split("|")
+      .map((p) => p.trim())
+      .map((p) => p.split(":")[0].trim())
+      .filter(Boolean);
+  }
+
+  function collectFrameworks(rows) {
+    const set = new Set();
+    rows.forEach((r) => {
+      extractFrameworksFromCell(r.COMPLIANCE).forEach((fw) => set.add(fw));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  // ------------------------------------------------------------------------
+  // 4. Chart.js helpers
+  // ------------------------------------------------------------------------
+  function destroyIfExists(name) {
+    if (window[name] && typeof window[name].destroy === "function") {
+      window[name].destroy();
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 5. Details Panel
+  // ------------------------------------------------------------------------
+  function renderDetailsPanel(r) {
+    const get = (k) => String(r[k] ?? "").trim();
+
+    const statusRaw = String(get("STATUS")).toUpperCase();
+    const sevRaw = String(get("SEVERITY")).trim();
+    const sevNorm = sevRaw.toLowerCase();
+
+    const title = `${get("CHECK_ID")} – ${get("CHECK_TITLE")}`.trim();
+    const remediation = get("REMEDIATION_RECOMMENDATION_TEXT");
+    const remediationUrl = get("REMEDIATION_RECOMMENDATION_URL");
+    const risk = get("RISK");
+    const desc = get("DESCRIPTION");
+
+    const findingId = getFindingId(r);
+    const triageState = getTriageState()[findingId] || { status: "", notes: "" };
+
+    const statusPillClass =
+      statusRaw === "FAIL"
+        ? "cwPill cwFail"
+        : statusRaw === "PASS"
+        ? "cwPill cwPass"
+        : statusRaw === "MANUAL"
+        ? "cwPill cwManual"
+        : "cwPill";
+
+    const sevClass =
+      sevNorm === "critical"
+        ? "cwSev cwSevCrit"
+        : sevNorm === "high"
+        ? "cwSev cwSevHigh"
+        : sevNorm === "medium"
+        ? "cwSev cwSevMed"
+        : sevNorm === "low"
+        ? "cwSev cwSevLow"
+        : "cwSev cwSevOther";
+
+    setTimeout(() => {
+      const btn = document.getElementById("triageSaveBtn");
+      const sel = document.getElementById("triageStatusSel");
+      const txt = document.getElementById("triageNotesTxt");
+
+      if (btn && sel && txt) {
+        btn.addEventListener("click", () => {
+          updateTriage(findingId, sel.value, txt.value);
+          btn.textContent = "Saved!";
+          btn.style.backgroundColor = "var(--cw-status-pass)";
+          btn.style.color = "#fff";
+          setTimeout(() => {
+            btn.textContent = "Save Triage";
+            btn.style.backgroundColor = "";
+            btn.style.color = "";
+          }, 1500);
+        });
+      }
+    }, 0);
+
+    return `
+      <div class="cwPanelTitle">Details</div>
+      <div class="cwDetailsTitle">${escapeHtml(title)} Finding</div>
+      
+      ${
+        statusRaw === "FAIL"
+          ? `
+        <div class="cwBlock" style="background:#f8fafc; border-color:#cbd5e1; border-width:2px; padding:12px; border-radius:8px; margin-top:16px;">
+          <div class="cwBlockTitle" style="color:var(--cw-text-main); margin-bottom:8px;">Triage & Notes</div>
+          
+          <select id="triageStatusSel" class="cwSelect" style="margin-bottom:8px; width:100%; border-color:#cbd5e1;">
+            <option value="">-- No Triage Status --</option>
+            <option value="investigating" ${triageState.status === "investigating" ? "selected" : ""}>Under Investigation</option>
+            <option value="pending" ${triageState.status === "pending" ? "selected" : ""}>Pending Fix</option>
+            <option value="fixed" ${triageState.status === "fixed" ? "selected" : ""}>Fixed (Awaiting Scan)</option>
+            <option value="ignored" ${triageState.status === "ignored" ? "selected" : ""}>Ignored (False Positive)</option>
+          </select>
+
+          <textarea id="triageNotesTxt" class="cwInput" placeholder="Add notes, Jira tickets, etc..." 
+            style="width:100%; min-height:60px; margin-bottom:8px; resize:vertical; font-family:inherit; border-color:#cbd5e1; box-sizing:border-box;"
+          >${escapeHtml(triageState.notes)}</textarea>
+          <button id="triageSaveBtn" class="cwBtn" style="width:100%; justify-content:center; text-align:center;">Save Triage</button>
+        </div>
+      `
+          : ""
+      }
+
+      <div style="margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+        <div class="cwKV">
+          <div class="cwKVKey">Status</div>
+          <div class="cwKVVal"><span class="${statusPillClass}">${escapeHtml(statusRaw)}</span></div>
+        </div>
+        <div class="cwKV">
+          <div class="cwKVKey">Severity</div>
+          <div class="cwKVVal"><span class="${sevClass}">${escapeHtml(sevRaw)}</span></div>
+        </div>
+        <div class="cwKV">
+          <div class="cwKVKey">Service</div>
+          <div class="cwKVVal">${escapeHtml(get("SERVICE_NAME"))}</div>
+        </div>
+        <div class="cwKV">
+          <div class="cwKVKey">Region</div>
+          <div class="cwKVVal">${escapeHtml(get("REGION"))}</div>
+        </div>
+        <div class="cwKV">
+          <div class="cwKVKey">Account</div>
+          <div class="cwKVVal">${escapeHtml(get("ACCOUNT_UID"))}</div>
+        </div>
+        <div class="cwKV">
+          <div class="cwKVKey">Resource</div>
+          <div class="cwKVVal cwMono cwBreak">${escapeHtml(get("RESOURCE_UID"))}</div>
+        </div>
+      </div>
+
+      ${desc ? `<div class="cwBlock"><div class="cwBlockTitle">Description</div><div class="cwWrap">${escapeHtml(desc)}</div></div>` : ""}
+      ${risk ? `<div class="cwBlock"><div class="cwBlockTitle">Risk</div><div class="cwWrap">${escapeHtml(risk)}</div></div>` : ""}
+      ${remediation ? `<div class="cwBlock"><div class="cwBlockTitle">Remediation</div><div class="cwWrap">${escapeHtml(remediation)}</div></div>` : ""}
+      ${
+        remediationUrl
+          ? `<div class="cwBlock"><div class="cwBlockTitle">Remediation URL</div><div class="cwWrap cwBreak"><a href="${escapeHtml(
+              remediationUrl
+            )}" target="_blank" rel="noopener" style="color:var(--cw-primary);">${escapeHtml(remediationUrl)}</a></div></div>`
+          : ""
+      }
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // 6. Security Overview
+  // ------------------------------------------------------------------------
+  function renderOverview(allRows) {
+    const host = $("viewOverview");
+    if (!host) return;
+
+    if (!host.dataset.initialized) {
+      host.innerHTML = `
+        <div class="card" style="padding:16px 14px;margin-bottom:12px;">
+          <div style="font-weight:900;color:var(--cw-text-main);margin-bottom:8px;">Overview filters</div>
+          <div class="cwFilters">
+            <div><div class="cwLabel">Account</div><select id="ovAccount" class="cwSelect"></select></div>
+            <div><div class="cwLabel">Region</div><select id="ovRegion" class="cwSelect"></select></div>
+            <div><div class="cwLabel">Severity</div><select id="ovSeverity" class="cwSelect"></select></div>
+            <div><div class="cwLabel">Service</div><select id="ovService" class="cwSelect"></select></div>
+            <div>
+              <div class="cwLabel">Status</div>
+              <select id="ovStatus" class="cwSelect">
+                <option value="ALL" selected>All</option>
+                <option value="FAIL">Fail</option>
+                <option value="PASS">Pass</option>
+                <option value="MANUAL">Manual</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:220px;">
+              <div class="cwLabel">Search</div>
+              <input id="ovSearch" class="cwInput" placeholder="Search check/resource...">
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+              <button id="ovReset" class="cwBtn" type="button">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="ovFilterReadout" style="font-size:12px; font-weight:700; color:#475569; margin-bottom:12px; padding:0 4px; display:none;"></div>
+
+        <div id="ovKpis" class="cwKpis"></div>
+
+        <div class="cwGrid2">
+          <div class="card" style="padding:14px;">
+            <div style="font-weight:900;color:var(--cw-text-main);margin-bottom:10px;">Overall status result</div>
+            <div style="height:240px;"><canvas id="ovStatusDonut"></canvas></div>
+          </div>
+          <div class="card" style="padding:14px;">
+            <div style="font-weight:900;color:var(--cw-text-main);margin-bottom:10px;">Top failed sections</div>
+            <div style="height:240px;"><canvas id="ovTopSections"></canvas></div>
+          </div>
+        </div>
+
+        <div class="cwGrid2" style="margin-top:12px;">
+          <div class="card" style="padding:14px;">
+            <div style="font-weight:900;color:var(--cw-text-main);margin-bottom:10px;">Findings by severity</div>
+            <div style="height:220px;"><canvas id="ovSeverityBar"></canvas></div>
+          </div>
+          <div class="card" style="padding:14px;">
+            <div style="font-weight:900;color:var(--cw-text-main);margin-bottom:10px;">Top failing services</div>
+            <div style="height:220px;"><canvas id="ovServiceBar"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px;margin-top:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div style="font-weight:900;color:var(--cw-text-main);">Findings <span id="ovFindingsCount" style="color:var(--cw-text-muted);font-weight:700;"></span></div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <div class="cwLabel" style="margin:0;">Rows:</div>
+              <select id="ovPageSize" class="cwSelect" style="min-width:90px;">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+          <div class="cwSplit2" style="margin-top:12px;">
+            <div id="ovTable"></div>
+            <div id="ovDetails" class="card cwDetails">
+              <div style="font-weight:900;color:var(--cw-text-main);">Details</div>
+              <div class="cwDetailsHint">Click a row to see details.</div>
+            </div>
+          </div>
+        </div>
+      `;
+      host.dataset.initialized = "true";
+    }
+
+    const els = {
+      account: $("ovAccount"),
+      region: $("ovRegion"),
+      severity: $("ovSeverity"),
+      service: $("ovService"),
+      status: $("ovStatus"),
+      search: $("ovSearch"),
+      reset: $("ovReset"),
+      kpis: $("ovKpis"),
+      filterReadout: $("ovFilterReadout"),
+      table: $("ovTable"),
+      details: $("ovDetails"),
+      pageSize: $("ovPageSize"),
+      findingsCount: $("ovFindingsCount")
+    };
+
+    function fillSelect(sel, first, values, selected) {
+      if (!sel) return;
+      sel.innerHTML =
+        `<option value="ALL">${first}</option>` +
+        values
+          .filter((v) => v !== first)
+          .map(
+            (v) =>
+              `<option value="${escapeHtml(v)}" ${
+                v === selected ? "selected" : ""
+              }>${escapeHtml(v)}</option>`
+          )
+          .join("");
+    }
+
+    fillSelect(els.account, "ALL", uniqueSorted(allRows, "ACCOUNT_UID"), "ALL");
+    fillSelect(els.region, "ALL", uniqueSorted(allRows, "REGION"), "ALL");
+    fillSelect(els.severity, "ALL", uniqueSorted(allRows, "SEVERITY"), "ALL");
+    fillSelect(els.service, "ALL", uniqueSorted(allRows, "SERVICE_NAME"), "ALL");
+
+    const state = {
+      account: "ALL",
+      region: "ALL",
+      severity: "ALL",
+      service: "ALL",
+      status: "ALL",
+      q: "",
+      pageSize: 50
+    };
+
+    function updateFilterReadout() {
+      if (!els.filterReadout) return;
+      const parts = [];
+      if (state.account !== "ALL") parts.push(`Account: <span style="color:var(--cw-primary);">${escapeHtml(state.account)}</span>`);
+      if (state.region !== "ALL") parts.push(`Region: <span style="color:var(--cw-primary);">${escapeHtml(state.region)}</span>`);
+      if (state.severity !== "ALL") parts.push(`Severity: <span style="color:var(--cw-primary);">${escapeHtml(state.severity)}</span>`);
+      if (state.service !== "ALL") parts.push(`Service: <span style="color:var(--cw-primary);">${escapeHtml(state.service)}</span>`);
+      if (state.status !== "ALL") parts.push(`Status: <span style="color:var(--cw-primary);">${escapeHtml(state.status)}</span>`);
+      if (state.q) parts.push(`Search: <span style="color:var(--cw-primary);">${escapeHtml(state.q)}</span>`);
+
+      if (parts.length > 0) {
+        els.filterReadout.innerHTML = `Active Filters: &nbsp;&nbsp; ${parts.join(" &nbsp;&nbsp; ")}`;
+        els.filterReadout.style.display = "block";
+      } else {
+        els.filterReadout.innerHTML = "";
+        els.filterReadout.style.display = "none";
+      }
+    }
+
+    function applyFilters(rows) {
+      return rows.filter((r) => {
+        if (state.account !== "ALL" && r.ACCOUNT_UID !== state.account) return false;
+        if (state.region !== "ALL" && r.REGION !== state.region) return false;
+        if (state.severity !== "ALL" && r.SEVERITY !== state.severity) return false;
+        if (state.service !== "ALL" && r.SERVICE_NAME !== state.service) return false;
+        if (state.status !== "ALL" && String(r.STATUS).toUpperCase() !== state.status) return false;
+
+        if (state.q) {
+          const hay = norm(
+            [r.CHECK_ID, r.CHECK_TITLE, r.SERVICE_NAME, r.RESOURCE_UID, r.DESCRIPTION].join(" ")
+          );
+          if (!hay.includes(state.q)) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderKpis(filtered) {
+      if (!els.kpis) return;
+      const c = countStatuses(filtered);
+      els.kpis.innerHTML = `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; width:100%;">
+          <div class="cwKpi"><div class="cwKpiLabel">Total</div><div class="cwKpiVal">${filtered.length}</div></div>
+          <div class="cwKpi cwKpiFail"><div class="cwKpiLabel">Fail</div><div class="cwKpiVal">${c.FAIL}</div></div>
+          
+          <div class="cwKpi" style="border-color:#cbd5e1; background:#f8fafc;"><div class="cwKpiLabel" style="color:#64748b;">Investigating</div><div class="cwKpiVal" style="color:#64748b;">${c.INVESTIGATING}</div></div>
+          <div class="cwKpi" style="border-color:#fde047; background:#fef9c3;"><div class="cwKpiLabel" style="color:#ca8a04;">Pending Fix</div><div class="cwKpiVal" style="color:#ca8a04;">${c.PENDING}</div></div>
+          <div class="cwKpi" style="border-color:#bbf7d0; background:#dcfce7;"><div class="cwKpiLabel" style="color:#16a34a;">Fixed</div><div class="cwKpiVal" style="color:#16a34a;">${c.FIXED}</div></div>
+          <div class="cwKpi" style="border-color:#e2e8f0; background:#f1f5f9;"><div class="cwKpiLabel" style="color:#94a3b8;">Ignored</div><div class="cwKpiVal" style="color:#94a3b8;">${c.IGNORED}</div></div>
+
+          <div class="cwKpi cwKpiPass"><div class="cwKpiLabel">Pass</div><div class="cwKpiVal">${c.PASS}</div></div>
+          <div class="cwKpi cwKpiManual"><div class="cwKpiLabel">Manual</div><div class="cwKpiVal">${c.MANUAL}</div></div>
+        </div>
+      `;
+    }
+
+    function renderCharts(filtered) {
+      const c = countStatuses(filtered);
+
+      destroyIfExists("ovStatusDonut");
+      const labels = ["FAIL", "PASS", "MANUAL", "IGNORED", "INVESTIGATING", "PENDING", "FIXED"];
+      const rawData = [c.FAIL, c.PASS, c.MANUAL, c.IGNORED, c.INVESTIGATING, c.PENDING, c.FIXED];
+      const colors = ["#ef4444", "#22c55e", "#f59e0b", "#94a3b8", "#cbd5e1", "#fde047", "#16a34a"];
+
+      const chartLabels = [];
+      const chartData = [];
+      const chartColors = [];
+      for (let i = 0; i < rawData.length; i++) {
+        if (rawData[i] > 0) {
+          chartLabels.push(labels[i]);
+          chartData.push(rawData[i]);
+          chartColors.push(colors[i]);
+        }
+      }
+
+      if ($("ovStatusDonut")) {
+        window.ovStatusDonut = new Chart($("ovStatusDonut"), {
+          type: "doughnut",
+          data: { labels: chartLabels, datasets: [{ data: chartData, backgroundColor: chartColors, borderWidth: 0 }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "62%",
+            plugins: { legend: { position: "left", display: true } }
+          }
+        });
+      }
+
+      const failed = filtered.filter((r) => {
+        if (String(r.STATUS).toUpperCase() !== "FAIL") return false;
+        const ts = getTriageState()[getFindingId(r)];
+        if (ts && (ts.status === "ignored" || ts.status === "fixed" || ts.status === "pending")) return false;
+        return true;
+      });
+
+      const bySection = groupMap(failed, (r) => String(r.CATEGORIES || "Other").trim());
+      const sortedSections = Array.from(bySection.entries())
+        .map(([k, v]) => ({ k, n: v.length }))
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 12);
+
+      destroyIfExists("ovTopSections");
+      if ($("ovTopSections")) {
+        window.ovTopSections = new Chart($("ovTopSections"), {
+          type: "bar",
+          data: {
+            labels: sortedSections.map((s) =>
+              s.k.length > 26 ? s.k.slice(0, 26) + "..." : s.k
+            ),
+            datasets: [{ data: sortedSections.map((s) => s.n), backgroundColor: "#ef4444", borderRadius: 4 }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: "y",
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }
+          }
+        });
+      }
+
+      const sev = countSeverities(filtered);
+      destroyIfExists("ovSeverityBar");
+      if ($("ovSeverityBar")) {
+        window.ovSeverityBar = new Chart($("ovSeverityBar"), {
+          type: "bar",
+          data: {
+            labels: ["critical", "high", "medium", "low"],
+            datasets: [
+              {
+                data: [sev.critical, sev.high, sev.medium, sev.low],
+                backgroundColor: ["#7a0916", "#ef4444", "#f59e0b", "#22c55e"],
+                borderRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+
+      const bySvc = groupMap(failed, (r) => String(r.SERVICE_NAME || "Other").trim());
+      const sortedSvc = Array.from(bySvc.entries())
+        .map(([k, v]) => ({ k, n: v.length }))
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 12);
+
+      destroyIfExists("ovServiceBar");
+      if ($("ovServiceBar")) {
+        window.ovServiceBar = new Chart($("ovServiceBar"), {
+          type: "bar",
+          data: {
+            labels: sortedSvc.map((s) =>
+              s.k.length > 26 ? s.k.slice(0, 26) + "..." : s.k
+            ),
+            datasets: [{ data: sortedSvc.map((s) => s.n), backgroundColor: "#7c2d12", borderRadius: 4 }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: "y",
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }
+          }
+        });
+      }
+    }
+
+    function renderTable(filtered) {
+      if (els.findingsCount) els.findingsCount.textContent = `(${filtered.length})`;
+      const tState = getTriageState();
+
+      const checks = Array.from(groupMap(filtered, (r) => r.CHECK_ID || "Unknown").entries()).map(
+        ([id, rows]) => {
+          let fail = 0,
+            pass = 0,
+            manual = 0;
+          let investigating = 0,
+            pending = 0,
+            fixed = 0,
+            ignored = 0;
+
+          rows.forEach((r) => {
+            const st = String(r.STATUS).toUpperCase();
+            if (st === "FAIL") {
+              const ts = tState[getFindingId(r)];
+              if (ts && ts.status === "ignored") ignored++;
+              else if (ts && ts.status === "investigating") investigating++;
+              else if (ts && ts.status === "pending") pending++;
+              else if (ts && ts.status === "fixed") fixed++;
+              else fail++;
+            } else if (st === "PASS") pass++;
+            else if (st === "MANUAL") manual++;
+          });
+          const title = rows[0]?.CHECK_TITLE;
+          return { id, title, rows, fail, pass, manual, investigating, pending, fixed, ignored };
+        }
+      );
+
+      if (!els.table) return;
+      els.table.innerHTML = `
+        <div class="cwTree">
+          ${checks
+            .slice(0, state.pageSize)
+            .map((c, ci) => {
+              const safeTitle = escapeHtml(c.title);
+              const titleShort =
+                c.title && c.title.length > 110
+                  ? escapeHtml(c.title.slice(0, 110)) + "..."
+                  : safeTitle;
+              return `
+              <details class="cwCheck" data-ci="${ci}">
+                <summary class="cwCheckSummary" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                  <div class="cwCheckLeft" style="min-width:0;flex:1;padding-right:8px;">
+                    <div class="cwCheckId">${escapeHtml(c.id)}</div>
+                    <div class="cwCheckTitle" title="${safeTitle}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${titleShort}</div>
+                  </div>
+                  <div class="cwPills" style="flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                    ${c.fail > 0 ? `<span class="cwPill cwFail">FAIL ${c.fail}</span>` : ""}
+                    ${
+                      c.investigating > 0
+                        ? `<span style="background:#f8fafc; border:1px solid #cbd5e1; color:#475569; padding:4px 8px; border-radius:999px; font-weight:900; font-size:10px;">INV ${c.investigating}</span>`
+                        : ""
+                    }
+                    ${
+                      c.pending > 0
+                        ? `<span style="background:#fef9c3; border:1px solid #fde047; color:#a16207; padding:4px 8px; border-radius:999px; font-weight:900; font-size:10px;">PEND ${c.pending}</span>`
+                        : ""
+                    }
+                    ${
+                      c.fixed > 0
+                        ? `<span style="background:#dcfce7; border:1px solid #bbf7d0; color:#15803d; padding:4px 8px; border-radius:999px; font-weight:900; font-size:10px;">FIXED ${c.fixed}</span>`
+                        : ""
+                    }
+                    ${
+                      c.ignored > 0
+                        ? `<span style="background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b; padding:4px 8px; border-radius:999px; font-weight:900; font-size:10px;">IGN ${c.ignored}</span>`
+                        : ""
+                    }
+                    ${c.pass > 0 ? `<span class="cwPill cwPass">PASS ${c.pass}</span>` : ""}
+                    ${c.manual > 0 ? `<span class="cwPill cwManual">MANUAL ${c.manual}</span>` : ""}
+                    ${
+                      c.fail === 0 &&
+                      c.pass === 0 &&
+                      c.manual === 0 &&
+                      c.investigating === 0 &&
+                      c.pending === 0 &&
+                      c.fixed === 0 &&
+                      c.ignored === 0
+                        ? `<span class="cwPill">0</span>`
+                        : ""
+                    }
+                  </div>
+                </summary>
+                <div class="cwTableWrap" style="margin:10px;">
+                  <table class="cwTable">
+                    <thead><tr><th>STATUS</th><th>SEV</th><th>SERVICE</th><th>RESOURCE</th></tr></thead>
+                    <tbody>
+                      ${c.rows
+                        .slice(0, 100)
+                        .map((r, ri) => {
+                          const ts = tState[getFindingId(r)];
+                          const isSuppressed = ts && (ts.status === "ignored" || ts.status === "fixed");
+                          const rowOpacity = isSuppressed ? "opacity:0.5;" : "";
+                          const triageBadge =
+                            ts && ts.status
+                              ? `<span style="font-size:9px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:800; text-transform:uppercase;">${escapeHtml(
+                                  ts.status
+                                )}</span>`
+                              : "";
+                          return `
+                        <tr class="cwRow" data-ci="${ci}" data-ri="${ri}" style="${rowOpacity}">
+                          <td>
+                            <span class="${
+                              String(r.STATUS).toUpperCase() === "FAIL"
+                                ? "cwStatusFail"
+                                : "cwStatusPass"
+                            }">${escapeHtml(r.STATUS)}</span>
+                            ${triageBadge}
+                          </td>
+                          <td>${escapeHtml(r.SEVERITY)}</td>
+                          <td>${escapeHtml(r.SERVICE_NAME)}</td>
+                          <td class="cwMono">${escapeHtml(r.RESOURCE_UID)}</td>
+                        </tr>
+                        `;
+                        })
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            `;
+            })
+            .join("")}
+        </div>
+      `;
+
+      els.table.querySelectorAll("tr.cwRow").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          const ci = Number(tr.getAttribute("data-ci"));
+          const ri = Number(tr.getAttribute("data-ri"));
+          if (els.details) els.details.innerHTML = renderDetailsPanel(checks[ci].rows[ri]);
+        });
+      });
+    }
+
+    function rerender() {
+      updateFilterReadout();
+      const filtered = applyFilters(allRows);
+      renderKpis(filtered);
+      renderCharts(filtered);
+      renderTable(filtered);
+    }
+
+    if (!host.dataset.eventsBound) {
+      ["account", "region", "severity", "service", "status"].forEach((k) => {
+        if (els[k]) els[k].addEventListener("change", () => { state[k] = els[k].value; rerender(); });
+      });
+      if (els.pageSize)
+        els.pageSize.addEventListener("change", () => {
+          state.pageSize = Number(els.pageSize.value);
+          rerender();
+        });
+      if (els.search)
+        els.search.addEventListener(
+          "input",
+          debounce(() => {
+            state.q = norm(els.search.value);
+            rerender();
+          }, 200)
+        );
+      if (els.reset)
+        els.reset.addEventListener("click", () => {
+          ["account", "region", "severity", "service", "status"].forEach((k) => {
+            state[k] = "ALL";
+            if (els[k]) els[k].value = "ALL";
+          });
+          state.q = "";
+          if (els.search) els.search.value = "";
+          rerender();
+        });
+
+      window.addEventListener("cw-triage-updated", () => {
+        rerender();
+      });
+      host.dataset.eventsBound = "true";
+    }
+
+    rerender();
+  }
+
+  // ------------------------------------------------------------------------
+  // 7. Compliance Explorer
+  // ------------------------------------------------------------------------
+  function localStatusCounts(rows) {
+    const c = { FAIL: 0, PASS: 0, MANUAL: 0, IGNORED: 0, INVESTIGATING: 0, PENDING: 0, FIXED: 0 };
+    let tState = {};
+    try {
+      const stored = localStorage.getItem("cw_triage_state");
+      if (stored) tState = JSON.parse(stored);
+    } catch (e) {}
+
+    rows.forEach((r) => {
+      const s = String(r.STATUS).toUpperCase();
+      if (s === "FAIL") {
+        const findingId = [
+          r.CHECKID || r.CHECK_ID,
+          r.RESOURCEUID || r.RESOURCE_UID,
+          r.ACCOUNTUID || r.ACCOUNT_UID
+        ].join("|");
+        const ts = tState[findingId];
+        if (ts && ts.status) {
+          const st = ts.status.toUpperCase();
+          if (c[st] !== undefined) {
+            c[st]++;
+          } else {
+            c.FAIL++;
+          }
+        } else {
+          c.FAIL++;
+        }
+      } else if (s in c) {
+        c[s]++;
+      }
+    });
+    return c;
+  }
+
+  function renderCompliance(allRows) {
+    const host = document.getElementById("viewCompliance");
+    if (!host) return;
+
+    if (!host.dataset.initialized) {
+      host.innerHTML = `
+        <div class="card" style="padding:16px 14px;margin-bottom:12px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div style="min-width:260px;">
+              <div style="font-size:16px;font-weight:900;color:var(--cw-text-main);">Compliance Explorer</div>
+              <div style="color:var(--cw-text-muted);margin-top:2px;">Browse by section & check affected resources.</div>
+            </div>
+            <div class="cwFilters" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <div>
+                <label class="cwLabel">Framework</label>
+                <select id="ceFramework" class="cwSelect"></select>
+              </div>
+              <div>
+                <label class="cwLabel">Status</label>
+                <select id="ceStatus" class="cwSelect">
+                  <option value="ALL" selected>All</option>
+                  <option value="FAIL">Fail</option>
+                  <option value="PASS">Pass</option>
+                  <option value="MANUAL">Manual</option>
+                </select>
+              </div>
+              <div>
+                <label class="cwLabel">Search</label>
+                <input id="ceSearch" class="cwInput" placeholder="Search section/check..." style="width:220px;" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="ceKpis" class="cwKpis" style="margin-bottom: 12px;"></div>
+
+        <div class="cwSplit2" style="margin-top:12px;">
+          <div id="ceTree" class="cwTree"></div>
+          <div id="ceDetails" class="card cwDetails">
+            <div style="font-weight:900;color:var(--cw-text-main);">Details</div>
+            <div class="cwDetailsHint">Click a row to see details.</div>
+          </div>
+        </div>
+      `;
+      host.dataset.initialized = "true";
+    }
+
+    const els = {
+      fw: document.getElementById("ceFramework"),
+      status: document.getElementById("ceStatus"),
+      search: document.getElementById("ceSearch"),
+      tree: document.getElementById("ceTree"),
+      details: document.getElementById("ceDetails"),
+      kpis: document.getElementById("ceKpis")
+    };
+
+    const allFrameworks = collectFrameworks(allRows);
+    if (els.fw) {
+      els.fw.innerHTML = allFrameworks
+        .map((f) => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`)
+        .join("");
+      if (allFrameworks.length > 0) els.fw.value = allFrameworks[0];
+    }
+
+    function renderKpis(filtered, currentFramework) {
+      if (!els.kpis) return;
+      const c = localStatusCounts(filtered);
+      const total = filtered.length;
+      const passCount = c.PASS || 0;
+      const compliancePct = total > 0 ? Math.round((passCount / total) * 100) : 0;
+      const pctColor =
+        compliancePct >= 80 ? "#22c55e" : compliancePct >= 60 ? "#f59e0b" : "#ef4444";
+      const fwDisplay = currentFramework ? escapeHtml(currentFramework) : "All Frameworks";
+
+      els.kpis.innerHTML = `
+  <div class="cwComplianceKpiGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; width:100%;">
+    <div class="cwFrameworkSummary" style="border: 1px solid rgba(255, 255, 255, 0.1); background-color:#22253D; box-shadow: 0 8px 20px -4px rgba(34, 37, 61, 0.3); grid-column: span 2; display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-radius: 12px;">
+      <div class="cwFrameworkSummary-header">
+        <div class="cwFrameworkSummary-label" style="font-size:12px; color:rgba(255,255,255,0.6); text-transform:uppercase; font-weight:800; letter-spacing:0.1em; margin-bottom:6px;">Framework</div>
+        <div class="cwFrameworkSummary-name" style="font-size:18px; font-weight:900; color:#FFFFFF; line-height:1.3; word-wrap:break-word; letter-spacing:-0.01em;">${fwDisplay}</div>
+      </div>
+      <div class="cwFrameworkSummary-scoreBlock" style="text-align:right;">
+        <div class="cwFrameworkSummary-scoreLabel" style="color:rgba(255,255,255,0.6); font-size:13px; font-weight: 800; text-transform:uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Compliance score</div>
+        <div class="cwFrameworkSummary-scoreValue" style="color:${pctColor}; font-size:42px; font-weight:900; line-height:1; text-shadow:0 2px 18px ${pctColor}55;">
+          ${compliancePct}%
+        </div>
+      </div>
+    </div>
+
+    <div class="cwKpi cwComplianceKpi"><div class="cwKpiLabel">Total Rows</div><div class="cwKpiVal">${total}</div></div>
+    <div class="cwKpi cwComplianceKpi cwKpiFail"><div class="cwKpiLabel">Fail</div><div class="cwKpiVal">${c.FAIL}</div></div>
+    ${c.INVESTIGATING > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#cbd5e1; background:#f8fafc;"><div class="cwKpiLabel" style="color:#64748b;">Investigating</div><div class="cwKpiVal" style="color:#64748b;">${c.INVESTIGATING}</div></div>` : ""}
+    ${c.PENDING > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#fde047; background:#fef9c3;"><div class="cwKpiLabel" style="color:#ca8a04;">Pending Fix</div><div class="cwKpiVal" style="color:#ca8a04;">${c.PENDING}</div></div>` : ""}
+    ${c.FIXED > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#bbf7d0; background:#dcfce7;"><div class="cwKpiLabel" style="color:#16a34a;">Fixed</div><div class="cwKpiVal" style="color:#16a34a;">${c.FIXED}</div></div>` : ""}
+    ${c.IGNORED > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#e2e8f0; background:#f1f5f9;"><div class="cwKpiLabel" style="color:#94a3b8;">Ignored</div><div class="cwKpiVal" style="color:#94a3b8;">${c.IGNORED}</div></div>` : ""}
+    <div class="cwKpi cwComplianceKpi cwKpiPass"><div class="cwKpiLabel">Pass</div><div class="cwKpiVal">${c.PASS}</div></div>
+    <div class="cwKpi cwComplianceKpi cwKpiManual"><div class="cwKpiLabel">Manual</div><div class="cwKpiVal">${c.MANUAL}</div></div>
+  </div>
+`;
+    }
+
+    function rerender() {
+      const fw = els.fw ? els.fw.value : null;
+      const st = els.status ? els.status.value : "ALL";
+      const q = els.search ? norm(els.search.value) : "";
+
+      const filtered = allRows.filter((r) => {
+        if (fw && !extractFrameworksFromCell(r.COMPLIANCE).includes(fw)) return false;
+        if (st !== "ALL" && String(r.STATUS).toUpperCase() !== st) return false;
+        if (q) {
+          const hay = norm(
+            [
+              r.COMPLIANCE,
+              r.CHECK_ID || r.CHECKID,
+              r.CHECK_TITLE || r.CHECKTITLE,
+              r.RESOURCE_UID || r.RESOURCEUID,
+              r.SERVICE_NAME || r.SERVICENAME
+            ].join(" ")
+          );
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      renderKpis(filtered, fw);
+
+      const sections = groupMap(filtered, (r) => (r.CATEGORIES || "Other").trim());
+      const sectionEntries = Array.from(sections.entries()).sort(
+        (a, b) => b[1].length - a[1].length
+      );
+
+      if (!els.tree) return;
+      els.tree.innerHTML = "";
+
+      for (const [sectionName, sectionRows] of sectionEntries) {
+        const secDet = document.createElement("details");
+        secDet.className = "cwSection";
+        secDet.open = true;
+        secDet.innerHTML = `
+          <summary class="cwSectionSummary">
+            <div class="cwSectionName">${escapeHtml(sectionName)}</div>
+            <div class="cwSectionMeta">${sectionRows.length} findings</div>
+          </summary>
+          <div class="cwSectionBody"></div>
+        `;
+        const body = secDet.querySelector(".cwSectionBody");
+
+        const byCheck = groupMap(sectionRows, (r) =>
+          ((r.CHECK_ID || r.CHECKID) || "Unknown").trim()
+        );
+        const checksSorted = Array.from(byCheck.entries()).sort(
+          (a, b) => b[1].length - a[1].length
+        );
+
+        for (const [checkId, checkRows] of checksSorted) {
+          const title = (checkRows[0]?.CHECK_TITLE || checkRows[0]?.CHECKTITLE || "").trim();
+          const cc = localStatusCounts(checkRows);
+          const chkDet = document.createElement("details");
+          chkDet.className = "cwCheck";
+          chkDet.innerHTML = `
+            <summary class="cwCheckSummary" style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="flex:1; min-width:0; padding-right:15px;">
+                <div class="cwCheckId">${escapeHtml(checkId)}</div>
+                <div class="cwCheckTitle" style="font-size:0.75rem;color:var(--cw-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(
+                  title
+                )}</div>
+              </div>
+              <div style="display:flex; gap:6px; flex-shrink:0;">
+                ${cc.FAIL ? `<span class="cwPill cwFail">FAIL ${cc.FAIL}</span>` : ""}
+                ${cc.PASS ? `<span class="cwPill cwPass">PASS ${cc.PASS}</span>` : ""}
+              </div>
+            </summary>
+            
+            <div class="cwTableWrap" style="margin:10px;">
+              <table class="cwTable">
+                <thead><tr><th>STATUS</th><th>SEV</th><th>SERVICE</th><th>RESOURCE</th></tr></thead>
+                <tbody>
+                  ${checkRows
+                    .slice(0, 250)
+                    .map((r, idx) => {
+                      let ts = null;
+                      try {
+                        const state = JSON.parse(localStorage.getItem("cw_triage_state")) || {};
+                        const fId = [
+                          r.CHECK_ID || r.CHECKID,
+                          r.RESOURCE_UID || r.RESOURCEUID,
+                          r.ACCOUNT_UID || r.ACCOUNTUID
+                        ].join("|");
+                        ts = state[fId];
+                      } catch (e) {}
+                      const isSuppressed =
+                        ts && (ts.status === "ignored" || ts.status === "fixed");
+                      const rowOpacity = isSuppressed ? "opacity:0.5" : "";
+                      const triageBadge =
+                        ts && ts.status
+                          ? `<span style="font-size:9px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:800; text-transform:uppercase;">${escapeHtml(
+                              ts.status
+                            )}</span>`
+                          : "";
+                      return `
+                    <tr class="cwRow" data-idx="${idx}" style="${rowOpacity}">
+                      <td><span class="${
+                        String(r.STATUS).toUpperCase() === "FAIL"
+                          ? "cwStatusFail"
+                          : "cwStatusPass"
+                      }">${escapeHtml(r.STATUS)}</span>${triageBadge}</td>
+                      <td>${escapeHtml(r.SEVERITY)}</td>
+                      <td>${escapeHtml(
+                        r.SERVICE_NAME || r.SERVICENAME || r.SERVICE || ""
+                      )}</td>
+                      <td class="cwMono">${escapeHtml(
+                        r.RESOURCE_UID || r.RESOURCEUID || r.RESOURCE || ""
+                      )}</td>
+                    </tr>
+                    `;
+                    })
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          `;
+
+          chkDet.querySelectorAll("tr.cwRow").forEach((tr) => {
+            tr.addEventListener("click", () => {
+              const idx = Number(tr.getAttribute("data-idx"));
+              if (els.details) els.details.innerHTML = renderDetailsPanel(checkRows[idx]);
+            });
+          });
+          body.appendChild(chkDet);
+        }
+        els.tree.appendChild(secDet);
+      }
+    }
+
+    if (!host.dataset.eventsBound) {
+      if (els.fw) els.fw.addEventListener("change", rerender);
+      if (els.status) els.status.addEventListener("change", rerender);
+      if (els.search) els.search.addEventListener("input", debounce(rerender, 200));
+      host.dataset.eventsBound = "true";
+    }
+
+    rerender();
+  }
+
+  // ------------------------------------------------------------------------
+  // 8. CSV Parser & Chart Loader
+  // ------------------------------------------------------------------------
+  function parseDelimited(text, delimiter) {
+    const lines = text.split("\n").filter(l => l.trim().length > 0);
+    if (!lines.length) return { headers: [], rows: [] };
+
+    const headers = parseDelimitedLine(lines[0], delimiter).map(h => h.trim());
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseDelimitedLine(lines[i], delimiter);
+      if (!cols.length) continue;
+      const obj = {};
+      for (let c = 0; c < headers.length; c++) {
+        let val = cols[c] ?? "";
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.substring(1, val.length - 1).replace(/""/g, '"');
+        }
+        obj[headers[c]] = val;
+      }
+      rows.push(obj);
+    }
+    return { headers, rows };
+  }
+
+  function parseDelimitedLine(line, delimiter) {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (!inQuotes && ch === delimiter) {
+        out.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+
+  function loadChartJs() {
+    if (window.Chart) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Chart.js failed to load"));
+      document.head.appendChild(s);
+    });
+  }
+
+  // ------------------------------------------------------------------------
+  // 9. Bootloader (tabs + data load)
+  // ------------------------------------------------------------------------
+  function bindTabs() {
+    const tabOverview = document.getElementById('tabOverview');
+    const tabCompliance = document.getElementById('tabCompliance');
+    const viewOverview = document.getElementById('viewOverview');
+    const viewCompliance = document.getElementById('viewCompliance');
+
+    if (!tabOverview || !tabCompliance) return;
+
+    tabOverview.addEventListener('click', () => {
+      tabOverview.classList.add('cwTabActive');
+      tabCompliance.classList.remove('cwTabActive');
+      viewOverview.style.display = 'block';
+      viewCompliance.style.display = 'none';
+    });
+
+    tabCompliance.addEventListener('click', () => {
+      tabCompliance.classList.add('cwTabActive');
+      tabOverview.classList.remove('cwTabActive');
+      viewOverview.style.display = 'none';
+      viewCompliance.style.display = 'block';
+    });
+  }
+
+  function boot() {
+    bindTabs();
+    
+    const conf = window.CWCONFIG || { 
+      clientName: "Synthetic Data — No Customer Info", 
+      environment: "DEMO",
+      csvUrl: "latest.csv" 
+    };
+
+    const uiClientName = document.getElementById('uiClientName');
+    const uiEnvBadge = document.getElementById('uiEnvBadge');
+    
+    if (uiClientName) uiClientName.textContent = conf.clientName;
+    if (uiEnvBadge) {
+      uiEnvBadge.textContent = conf.environment;
+      if (conf.environment === "PROD") {
+        uiEnvBadge.style.backgroundColor = "#10b981";
+      } else {
+        uiEnvBadge.style.backgroundColor = "#7c3aed";
+      }
+    }
+    
+    if (!conf.csvUrl) {
+      document.getElementById('viewOverview').innerHTML = 
+        `<div style="color:#ef4444;padding:20px;">Configuration Error: Missing CSV URL.</div>`;
+      return;
+    }
+
+    fetch(conf.csvUrl, { cache: 'no-store' })
+      .then(res => {
+        if (!res.ok) throw new Error("CSV fetch failed HTTP " + res.status);
+        return res.text();
+      })
+      .then(text => {
+        let parsed = parseDelimited(text, ';');
+        if (parsed.headers.length <= 1) {
+          parsed = parseDelimited(text, ',');
+        }
+        
+        const rowsRaw = parsed.rows;
+        const rows = hydrateRowsWithMeta(rowsRaw);
+        window.allRows = rows;
+
+        return loadChartJs().then(() => {
+          window.Chart.defaults.color = '#64748b';
+          window.Chart.defaults.scale.grid.color = '#f1f5f9';
+          window.Chart.defaults.font.family = "'Inter', sans-serif";
+          
+          renderOverview(rows);
+          renderCompliance(rows);
+          renderSummary(rows);
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        const o = document.getElementById('viewOverview');
+        if (o) o.innerHTML = `<div style="color:#ef4444;padding:20px;">Error loading data: ${err.message}</div>`;
+      });
+  }
+
+  // ------------------------------------------------------------------------
+// 10. Summary Dashboard - Security + Compliance Snapshot
+// ------------------------------------------------------------------------
+function renderSummary(allRows) {
+  var host =
+    document.getElementById("viewSummaryInner") ||
+    document.getElementById("viewSummary");
+  if (!host) return;
+
+  allRows = Array.isArray(allRows) ? allRows : [];
+
+  // --- BASIC SECURITY METRICS ---
+  var totalChecks = allRows.length;
+  var passCount = 0;
+  var failCount = 0;
+  var criticalFail = 0;
+  var highFail = 0;
+  var byService = {}; // { serviceName: { critical, high, totalFail } }
+
+  allRows.forEach(function (r) {
+    var status = String(r.STATUS || r.Status || "").toUpperCase();
+    var sev = String(r.SEVERITY || r.Severity || "").toLowerCase();
+    var svc = String(r.SERVICE_NAME || r.SERVICENAME || r.SERVICE || r.Service || "Unknown").trim();
+    if (!svc) svc = "Unknown";
+
+    if (status === "PASS") {
+      passCount++;
+      return;
+    }
+    if (status !== "FAIL") return;
+
+    failCount++;
+
+    if (!byService[svc]) {
+      byService[svc] = { critical: 0, high: 0, totalFail: 0 };
+    }
+    byService[svc].totalFail++;
+
+    if (sev === "critical") {
+      criticalFail++;
+      byService[svc].critical++;
+    } else if (sev === "high") {
+      highFail++;
+      byService[svc].high++;
+    }
+  });
+
+  var passRate = totalChecks
+    ? Math.round((passCount / totalChecks) * 100)
+    : 0;
+
+  var postureLabel = "Needs Attention";
+  if (passRate >= 90) postureLabel = "Strong";
+  else if (passRate >= 70) postureLabel = "Fair";
+
+  // --- TOP SERVICES WITH RISK ---
+  var topServices = Object.keys(byService)
+    .map(function (svc) {
+      var m = byService[svc];
+      return {
+        name: svc,
+        critical: m.critical,
+        high: m.high,
+        totalFail: m.totalFail
+      };
+    })
+    .sort(function (a, b) {
+      var aScore = a.critical * 100 + a.high * 10 + a.totalFail;
+      var bScore = b.critical * 100 + b.high * 10 + b.totalFail;
+      return bScore - aScore;
+    })
+    .slice(0, 3);
+
+  var topServicesHtml = "";
+  if (topServices.length) {
+    topServicesHtml =
+      '<div class="cwSummaryCard" style="margin-top:12px;">' +
+      '  <div class="cwSummaryLabel">Top services with risk</div>' +
+      '  <ul class="cwSummaryList">';
+    topServices.forEach(function (s) {
+      topServicesHtml +=
+        "<li>" +
+        s.name +
+        " – " +
+        s.critical +
+        " critical / " +
+        s.high +
+        " high failing checks</li>";
+    });
+    topServicesHtml += "  </ul></div>";
+  }
+
+  // --- COMPLIANCE SNAPSHOT (ALL FRAMEWORKS, ALPHABETICAL, 6 PER ROW) ---
+  function extractFrameworksFromCellSummary(cell) {
+    var s = String(cell || "").trim();
+    if (!s) return [];
+    return s
+      .split("|")
+      .map(function (p) { return p.trim(); })
+      .map(function (p) { return p.split(":")[0].trim(); })
+      .filter(Boolean);
+  }
+
+  var frameworkStats = {}; // { fw: { total, pass } }
+  allRows.forEach(function (r) {
+    var status = String(r.STATUS || r.Status || "").toUpperCase();
+    var fws = extractFrameworksFromCellSummary(r.COMPLIANCE || r.Compliance);
+    if (!fws.length) return;
+    fws.forEach(function (fw) {
+      if (!frameworkStats[fw]) {
+        frameworkStats[fw] = { total: 0, pass: 0 };
+      }
+      frameworkStats[fw].total++;
+      if (status === "PASS") {
+        frameworkStats[fw].pass++;
+      }
+    });
+  });
+
+  var fwList = Object.keys(frameworkStats)
+    .map(function (fw) {
+      var stat = frameworkStats[fw];
+      var pct = stat.total
+        ? Math.round((stat.pass / stat.total) * 100)
+        : 0;
+      return { name: fw, pct: pct, total: stat.total };
+    })
+    .sort(function (a, b) {
+      return a.name.localeCompare(b.name);
+    });
+
+  var complianceHtml = "";
+  if (fwList.length) {
+    complianceHtml =
+      '<div class="cwSummaryCard cwSummaryCompliance" style="margin-top:12px;">' +
+      '  <div class="cwSummaryLabel">Compliance snapshot (all frameworks)</div>' +
+      '  <div class="cwSummaryComplianceGrid cwSummaryComplianceGrid-6">';
+    fwList.forEach(function (fw) {
+      var bandClass =
+        fw.pct >= 80
+          ? "cwSummaryCompliance-good"
+          : fw.pct >= 60
+          ? "cwSummaryCompliance-warn"
+          : "cwSummaryCompliance-bad";
+
+      var summaryText =
+        fw.pct +
+        "% of " +
+        fw.total +
+        " mapped checks are passing for " +
+        fw.name +
+        ".";
+
+      complianceHtml +=
+        '<div class="cwSummaryComplianceItem" title="' +
+        summaryText +
+        '">' +
+        '  <div class="cwSummaryComplianceName">' +
+        fw.name +
+        "</div>" +
+        '  <div class="cwSummaryCompliancePct ' +
+        bandClass +
+        '">' +
+        fw.pct +
+        "%</div>" +
+        "</div>";
+    });
+    complianceHtml +=
+      "  </div>" +
+      '  <div class="cwSummaryComplianceHint">Hover any framework to see its high-level score details. Full breakdowns live in the paid Compliance Explorer.</div>' +
+      "</div>";
+  }
+
+  // --- FINAL RENDER ---
+  host.innerHTML =
+    '<div class="cwSummaryHeader">' +
+    '  <div class="cwSummaryHeader-main">' +
+    '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
+    '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage. Deeper triage and fix guidance are available in the full CloudWizard dashboard.</div>' +
+    "  </div>" +
+    '  <div class="cwSummaryHeader-pill">' +
+    postureLabel +
+    " posture" +
+    "  </div>" +
+    "</div>" +
+    '<div class="cwSummaryGrid">' +
+    '  <div class="cwSummaryCard">' +
+    '    <div class="cwSummaryLabel">Checks Passed</div>' +
+    '    <div class="cwSummaryValue">' +
+    passRate +
+    "%</div>" +
+    '    <div class="cwSummarySub">of ' +
+    totalChecks +
+    " controls</div>" +
+    "  </div>" +
+    '  <div class="cwSummaryCard">' +
+    '    <div class="cwSummaryLabel">Critical Risks</div>' +
+    '    <div class="cwSummaryValue cwSummaryValue-critical">' +
+    criticalFail +
+    "</div>" +
+    '    <div class="cwSummarySub">Failing critical checks</div>"' +
+    "  </div>" +
+    '  <div class="cwSummaryCard">' +
+    '    <div class="cwSummaryLabel">High Risks</div>' +
+    '    <div class="cwSummaryValue cwSummaryValue-high">' +
+    highFail +
+    "</div>" +
+    '    <div class="cwSummarySub">Failing high checks</div>' +
+    "  </div>" +
+    '  <div class="cwSummaryCard">' +
+    '    <div class="cwSummaryLabel">Open Findings</div>' +
+    '    <div class="cwSummaryValue">' +
+    failCount +
+    "</div>" +
+    '    <div class="cwSummarySub">Total failing controls</div>' +
+    "  </div>" +
+    "</div>" +
+    topServicesHtml +
+    complianceHtml +
+    '<div class="cwSummaryCard" style="margin-top:12px;">' +
+    '  <div class="cwSummaryLabel">What this free summary shows</div>' +
+    '  <ul class="cwSummaryList">' +
+    "    <li>Your overall pass rate and current risk level.</li>" +
+    "    <li>How many critical and high risks are still open.</li>" +
+    "    <li>Which services and frameworks are driving most of the risk.</li>" +
+    "  </ul>" +
+    '  <div class="cwSummaryUpgradeHint">For full-service drill-down, remediation steps, and detailed framework views, upgrade to the full CloudWizard Security & Compliance Dashboard.</div>' +
+    "</div>";
+}
+
+  // ------------------------------------------------------------------------
+  // 11. Auto-start & Exports
+  // ------------------------------------------------------------------------
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  window.parseDelimited = parseDelimited;
+  window.hydrateRowsWithMeta = hydrateRowsWithMeta;
+  window.loadChartJs = loadChartJs;
+  window.renderOverview = renderOverview;
+  window.renderCompliance = renderCompliance;
+  window.renderSummary = renderSummary;
+
+})(); // closing the IIFE
