@@ -1203,8 +1203,8 @@
       });
   }
 
-    // ------------------------------------------------------------------------
-  // 10. Summary View
+  // ------------------------------------------------------------------------
+  // 10. Summary View (With Embedded Charts)
   // ------------------------------------------------------------------------
   function renderSummary(allRows) {
     const host = $("viewSummaryInner");
@@ -1225,7 +1225,6 @@
     if (passRate >= 90) postureLabel = "Strong";
     else if (passRate >= 70) postureLabel = "Fair";
 
-    // Build byService and topServices
     var byService = {};
     allRows.forEach(function(r) {
       if (String(r.STATUS).toUpperCase() === 'FAIL') {
@@ -1238,19 +1237,6 @@
       }
     });
 
-    var topServices = Object.keys(byService).map(function(svc) {
-      return {
-        name: svc,
-        critical: byService[svc].critical,
-        high: byService[svc].high,
-        totalFail: byService[svc].totalFail
-      };
-    }).sort(function(a, b) {
-      return (b.critical * 100 + b.high * 10 + b.totalFail) - 
-             (a.critical * 100 + a.high * 10 + a.totalFail);
-    }).slice(0, 5);
-
-    // Build frameworkStats and fwList
     var frameworkStats = {};
     allRows.forEach(function(r) {
       var fws = extractFrameworksFromCell(r.COMPLIANCE);
@@ -1275,86 +1261,67 @@
     var fwList = Object.keys(frameworkStats).map(function(fwName) {
       var stats = frameworkStats[fwName];
       var pr = stats.total > 0 ? (stats.pass / stats.total) * 100 : 0;
-      return {
-        id: fwName,
-        name: fwName,
-        passRate: pr,
-        total: stats.total,
-        pass: stats.pass,
-        fail: stats.fail,
-        highFail: stats.highFail,
-        criticalFail: stats.criticalFail
-      };
-    }).sort(function(a, b) {
-      return a.name.localeCompare(b.name);
-    });
+      return { id: fwName, name: fwName, passRate: pr, total: stats.total, pass: stats.pass, fail: stats.fail, highFail: stats.highFail, criticalFail: stats.criticalFail };
+    }).sort(function(a, b) { return a.name.localeCompare(b.name); });
 
-     // -------- 10B. HTML Generators --------
-    var topServicesHtml = "";
-    if (topServices && topServices.length) {
-      topServicesHtml =
-        '<div class="cwSummaryCard" style="margin-top:12px;">' +
-        '  <div class="cwSummaryLabel">Top services with risk</div>' +
-        '  <ul class="cwSummaryList">';
-      topServices.forEach(function (s) {
-        topServicesHtml += "<li>" + s.name + " – " + s.critical + " critical / " + s.high + " high failing checks</li>";
-      });
-      topServicesHtml += "  </ul></div>";
-    }
-
+    // -------- 10B. HTML Generators --------
     var criticalSummaryHtml = "";
     if (criticalFail > 0) {
       var criticalServices = Object.keys(byService || {})
-        .map(function (svc) {
-          var m = byService[svc];
-          return { name: svc, critical: m.critical, high: m.high, totalFail: m.totalFail };
-        })
+        .map(function (svc) { return { name: svc, critical: byService[svc].critical, high: byService[svc].high, totalFail: byService[svc].totalFail }; })
         .filter(function (s) { return s.critical > 0; })
         .sort(function (a, b) { return (b.critical * 100 + b.high * 10 + b.totalFail) - (a.critical * 100 + a.high * 10 + a.totalFail); })
         .slice(0, 5);
 
       var criticalListHtml = "";
       if (criticalServices.length) {
-        criticalListHtml = '<ul class="cwSummaryList" style="margin-top:8px;">' +
+        criticalListHtml = '<ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 0.8rem; color: #881337;">' +
           criticalServices.map(function (s) {
-            return "<li>" + s.name + " – " + s.critical + " critical, " + s.high + " high failing checks</li>";
+            return "<li style='margin-bottom:4px;'>" + s.name + " – " + s.critical + " critical</li>";
           }).join("") + "</ul>";
       }
 
       criticalSummaryHtml =
-        '<div class="cwSummaryCard" style="margin-top:12px;">' +
-        '  <div class="cwSummaryLabel">Critical risks summary</div>' +
-        '  <div class="cwSummaryBody">' +
-        '    You currently have <span class="cwSummaryEmphasis">' + criticalFail + "</span> failing critical checks. " +
-        "    Most of these are concentrated in your top risk services above. Tackle those first, then move on to high risks." +
-        "  </div>" + criticalListHtml + "</div>";
+        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #fff1f2; border-color: #fecdd3;">' +
+        '  <div class="cwSummaryLabel" style="color: #be123c;">Critical Risks</div>' +
+        '  <div class="cwSummaryValue cwSummaryValue-critical" style="font-size: 32px; margin: 8px 0 4px;">' + criticalFail + '</div>' +
+        '  <div class="cwSummarySub" style="font-weight: 600; color: #be123c; margin-bottom: 8px;">Failing critical checks</div>' +
+        '  <div class="cwSummaryBody" style="font-size: 0.8rem; color: #881337;">Concentrated in your top services:</div>' + 
+        criticalListHtml + 
+        '</div>';
+    } else {
+      criticalSummaryHtml = 
+        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #f0fdf4; border-color: #bbf7d0;">' +
+        '  <div class="cwSummaryLabel" style="color: #15803d;">Critical Risks</div>' +
+        '  <div class="cwSummaryValue" style="font-size: 32px; margin: 8px 0 4px; color: #15803d;">0</div>' +
+        '  <div class="cwSummarySub" style="font-weight: 600; color: #166534;">No critical failing checks!</div>' +
+        '</div>';
     }
 
-       // Compliance snapshot – Original Dark Blue Design
+    var chartsHtml = 
+      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:16px;">' +
+      criticalSummaryHtml +
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
+      '    <div class="cwSummaryLabel">Failing by Severity</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumSeverityBar"></canvas></div>' +
+      '  </div>' +
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
+      '    <div class="cwSummaryLabel">Top Failing Services</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumServiceBar"></canvas></div>' +
+      '  </div>' +
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
+      '    <div class="cwSummaryLabel">Top Failing Regions</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>' +
+      '  </div>' +
+      '</div>';
+
     var complianceHtml = "";
     if (fwList && fwList.length) {
       var cardsHtml = fwList.map(function (fw) {
         var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
-        var totalFw = fw.total || 0;
-        var passFw = fw.pass || 0;
-        var highFailFw = fw.highFail || 0;
-        var criticalFailFw = fw.criticalFail || 0;
-
-        var postureLabelFw = "Needs attention";
-        var postureClass = "cwSummaryPill-warn";
-
-        if (passRateFw >= 90) {
-          postureLabelFw = "Strong";
-          postureClass = "cwSummaryPill-good";
-        } else if (passRateFw >= 70) {
-          postureLabelFw = "Fair";
-          postureClass = "cwSummaryPill-fair";
-        }
-
-        var failLabel =
-          highFailFw + criticalFailFw === 0
-            ? "No high or critical failing controls"
-            : criticalFailFw + " critical, " + highFailFw + " high failing controls";
+        var postureClass = passRateFw >= 90 ? "cwSummaryPill-good" : (passRateFw >= 70 ? "cwSummaryPill-fair" : "cwSummaryPill-warn");
+        var postureLabelFw = passRateFw >= 90 ? "Strong" : (passRateFw >= 70 ? "Fair" : "Needs attention");
+        var failLabel = (fw.highFail + fw.criticalFail === 0) ? "No high or critical failing controls" : fw.criticalFail + " critical, " + fw.highFail + " high failing controls";
 
         return (
           '<article class="cwSummaryCard-fw" data-fw-id="' + (fw.id || "") + '">' +
@@ -1362,71 +1329,143 @@
           '    <h3 class="cwSummaryCardTitle" title="' + fw.name + '">' + fw.name + '</h3>' +
           '    <span class="cwSummaryPill ' + postureClass + '">' + postureLabelFw + '</span>' +
           '  </header>' +
-
           '  <div class="cwSummaryCardBarWrap">' +
           '    <span class="cwSummaryCardBarLabel">' + passRateFw.toFixed(0) + '% passed</span>' +
           '    <div class="cwSummaryCardBarTrack">' +
-          '      <div class="cwSummaryCardBarFill cwSummaryCardBarFill-' +
-                 (passRateFw >= 90 ? "good" : passRateFw >= 70 ? "fair" : "bad") +
-          '" style="width:' + passRateFw.toFixed(0) + '%;"></div>' +
+          '      <div class="cwSummaryCardBarFill cwSummaryCardBarFill-' + (passRateFw >= 90 ? "good" : passRateFw >= 70 ? "fair" : "bad") + '" style="width:' + passRateFw.toFixed(0) + '%;"></div>' +
           '    </div>' +
           '  </div>' +
-
           '  <div class="cwSummaryCardMetrics">' +
-          '    <div class="cwSummaryMetric">' +
-          '      <span class="cwSummaryMetricLabel">Controls</span>' +
-          '      <span class="cwSummaryMetricValue">' + passFw + '/' + totalFw + '</span>' +
-          '    </div>' +
-          '    <div class="cwSummaryMetric">' +
-          '      <span class="cwSummaryMetricLabel">High / critical</span>' +
-          '      <span class="cwSummaryMetricValue">' + highFailFw + ' / ' + criticalFailFw + '</span>' +
-          '    </div>' +
+          '    <div class="cwSummaryMetric"><span class="cwSummaryMetricLabel">Controls</span><span class="cwSummaryMetricValue">' + fw.pass + '/' + fw.total + '</span></div>' +
+          '    <div class="cwSummaryMetric"><span class="cwSummaryMetricLabel">High / critical</span><span class="cwSummaryMetricValue">' + fw.highFail + ' / ' + fw.criticalFail + '</span></div>' +
           '  </div>' +
-
           '  <p class="cwSummaryCardFoot">' + failLabel + '</p>' +
-
-          '  <button type="button" class="cwSummaryCardLink" data-fw-id="' + (fw.id || "") + '">' +
-          '    View failing checks' +
-          '  </button>' +
+          '  <button type="button" class="cwSummaryCardLink" data-fw-id="' + (fw.id || "") + '">View failing checks</button>' +
           '</article>'
         );
       }).join("");
 
-           complianceHtml =
+      complianceHtml =
         '<div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">' +
         '  <h2 class="cwSectionTitleCentered">Compliance Snapshot</h2>' +
-        '  <div class="cwSummaryGrid-fw">' +
-             cardsHtml +
-        '  </div>' +
+        '  <div class="cwSummaryGrid-fw">' + cardsHtml + '  </div>' +
         '</div>';
     }
-    // -------- 10C. Final Render --------
+
+       // -------- 10C. Final Render HTML --------
+    // Calculate total unique services with failures for the new KPI
+    var failingServicesCount = Object.keys(byService).length;
+
     host.innerHTML =
       '<div class="cwSummaryHeader">' +
       '  <div class="cwSummaryHeader-main">' +
       '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
-      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage. Deeper triage and fix guidance are available in the full CloudWizard dashboard.</div>' +
+      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
       '  </div>' +
       '  <div class="cwSummaryHeader-pill">' + postureLabel + ' posture</div>' +
       '</div>' +
-      '<div class="cwSummaryGrid">' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' controls</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Critical Risks</div><div class="cwSummaryValue cwSummaryValue-critical">' + criticalFail + '</div><div class="cwSummarySub">Failing critical checks</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High Risks</div><div class="cwSummaryValue cwSummaryValue-high">' + highFail + '</div><div class="cwSummarySub">Failing high checks</div></div>' +
+      
+      // New 4-Box KPI Grid
+      '<div class="cwSummaryGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue" style="color:#16a34a;">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' total controls</div></div>' +
       '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High / Critical Risks</div><div class="cwSummaryValue" style="color:#dc2626;">' + (highFail + criticalFail) + '</div><div class="cwSummarySub">Require immediate action</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Services Impacted</div><div class="cwSummaryValue" style="color:#d97706;">' + failingServicesCount + '</div><div class="cwSummarySub">AWS services with findings</div></div>' +
       '</div>' +
-      topServicesHtml +
-      criticalSummaryHtml +
-      complianceHtml +
-      '<div class="cwSummaryCard" style="margin-top:12px;">' +
-      '  <div class="cwSummaryLabel">What this free summary shows</div>' +
-      '  <ul class="cwSummaryList">' +
-      '    <li>Your overall pass rate and current risk level.</li>' +
-      '    <li>How many critical and high risks are still open.</li>' +
-      '    <li>Which services and frameworks are driving most of the risk.</li>' +
-      '  </ul>' +
-      '  <div class="cwSummaryUpgradeHint">For full-service drill-down, remediation steps, and detailed framework views, upgrade to the full CloudWizard Security & Compliance Dashboard.</div>' +
-      '</div>';
+      
+      chartsHtml + 
+      complianceHtml;
+
+    // -------- 10D. Render Chart.js Canvases --------
+    if (window.Chart) {
+      destroyIfExists("sumSeverityBar");
+      if ($("sumSeverityBar")) {
+        window.sumSeverityBar = new Chart($("sumSeverityBar"), {
+          type: "bar",
+          data: { 
+            labels: ["Critical", "High", "Medium", "Low"],
+            datasets: [{ 
+              data: [severities.critical, severities.high, severities.medium, severities.low], 
+              backgroundColor: ["#7a0916", "#ef4444", "#f59e0b", "#22c55e"], 
+              borderRadius: 4 
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      const failedRows = allRows.filter(r => String(r.STATUS).toUpperCase() === "FAIL");
+
+      const svcStats = {};
+      failedRows.forEach(r => {
+        const svc = String(r.SERVICE_NAME || "Other").trim();
+        const sev = norm(r.SEVERITY);
+        if (!svcStats[svc]) svcStats[svc] = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+        svcStats[svc].total++;
+        if (sev === 'critical') svcStats[svc].critical++;
+        if (sev === 'high') svcStats[svc].high++;
+        if (sev === 'medium') svcStats[svc].medium++;
+        if (sev === 'low') svcStats[svc].low++;
+      });
+
+      const sortedSvc = Object.keys(svcStats).map(k => ({ name: k, stats: svcStats[k] })).sort((a, b) => b.stats.total - a.stats.total).slice(0, 10);
+
+      destroyIfExists("sumServiceBar");
+      if ($("sumServiceBar")) {
+        window.sumServiceBar = new Chart($("sumServiceBar"), {
+          type: "bar",
+          data: { 
+            labels: sortedSvc.map(s => s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name),
+            datasets: [
+              { label: "Critical", data: sortedSvc.map(s => s.stats.critical), backgroundColor: "#7a0916" },
+              { label: "High", data: sortedSvc.map(s => s.stats.high), backgroundColor: "#ef4444" },
+              { label: "Medium", data: sortedSvc.map(s => s.stats.medium), backgroundColor: "#f59e0b" },
+              { label: "Low", data: sortedSvc.map(s => s.stats.low), backgroundColor: "#22c55e" }
+            ]
+          },
+          options: { 
+            responsive: true, maintainAspectRatio: false, indexAxis: "y", 
+            plugins: { legend: { display: false } }, 
+            scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true, grid: { display: false } } } 
+          }
+        });
+      }
+
+      const regStats = {};
+      failedRows.forEach(r => {
+        const reg = String(r.REGION || "global").trim();
+        const sev = norm(r.SEVERITY);
+        if (!regStats[reg]) regStats[reg] = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+        regStats[reg].total++;
+        if (sev === 'critical') regStats[reg].critical++;
+        if (sev === 'high') regStats[reg].high++;
+        if (sev === 'medium') regStats[reg].medium++;
+        if (sev === 'low') regStats[reg].low++;
+      });
+
+      const sortedReg = Object.keys(regStats).map(k => ({ name: k, stats: regStats[k] })).sort((a, b) => b.stats.total - a.stats.total).slice(0, 10);
+
+      destroyIfExists("sumRegionBar");
+      if ($("sumRegionBar")) {
+        window.sumRegionBar = new Chart($("sumRegionBar"), {
+          type: "bar",
+          data: { 
+            labels: sortedReg.map(s => s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name),
+            datasets: [
+              { label: "Critical", data: sortedReg.map(s => s.stats.critical), backgroundColor: "#7a0916" },
+              { label: "High", data: sortedReg.map(s => s.stats.high), backgroundColor: "#ef4444" },
+              { label: "Medium", data: sortedReg.map(s => s.stats.medium), backgroundColor: "#f59e0b" },
+              { label: "Low", data: sortedReg.map(s => s.stats.low), backgroundColor: "#22c55e" }
+            ]
+          },
+          options: { 
+            responsive: true, maintainAspectRatio: false, indexAxis: "y", 
+            plugins: { legend: { display: false } }, 
+            scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true, grid: { display: false } } } 
+          }
+        });
+      }
+    }
   }
   // ------------------------------------------------------------------------
   // 11. Auto-start & Exports

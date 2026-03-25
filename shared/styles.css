@@ -464,7 +464,7 @@ body {
 }
 
 /* ---------------------------------------------------
-   Compliance Frameworks Grid & Dark Cards
+   Compliance Frameworks Grid (Light Theme)
    --------------------------------------------------- */
 .cwSummaryGrid-fw {
   display: grid;
@@ -482,12 +482,12 @@ body {
 .cwSummaryCard-fw {
   display: flex;
   flex-direction: column;
-  background: #020617;
-  background: radial-gradient(circle at top left, #1d4ed8 0, #020617 55%);
+  background: #ffffff;
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  padding: 12px 14px;
-  color: #e5e7eb;
+  border: 1px solid #e2e8f0;
+  padding: 14px;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .cwSummaryCardHead {
@@ -501,7 +501,8 @@ body {
 .cwSummaryCardTitle {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  color: #1e293b;
   line-height: 1.3;
 }
 
@@ -510,23 +511,14 @@ body {
   align-items: center;
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.cwSummaryPill-good {
-  background: rgba(16, 185, 129, 0.16);
-  color: #6ee7b7;
-}
-.cwSummaryPill-fair {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fdba74;
-}
-.cwSummaryPill-warn {
-  background: rgba(248, 113, 113, 0.18);
-  color: #fecaca;
-}
+.cwSummaryPill-good { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.cwSummaryPill-fair { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.cwSummaryPill-warn { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
 .cwSummaryCardBarWrap {
   margin-top: 4px;
@@ -536,78 +528,69 @@ body {
   display: block;
   margin-bottom: 4px;
   font-size: 11px;
-  opacity: 0.8;
+  font-weight: 600;
+  color: #475569;
 }
 
 .cwSummaryCardBarTrack {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.9);
+  background: #e2e8f0;
   overflow: hidden;
 }
 .cwSummaryCardBarFill {
   height: 100%;
   border-radius: 999px;
 }
-.cwSummaryCardBarFill-good { background: linear-gradient(90deg, #22c55e, #a3e635); }
-.cwSummaryCardBarFill-fair { background: linear-gradient(90deg, #f97316, #fde047); }
-.cwSummaryCardBarFill-bad  { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.cwSummaryCardBarFill-good { background: #22c55e; }
+.cwSummaryCardBarFill-fair { background: #f59e0b; }
+.cwSummaryCardBarFill-bad  { background: #ef4444; }
 
 .cwSummaryCardMetrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 .cwSummaryMetricLabel {
   display: block;
-  font-size: 11px;
-  opacity: 0.75;
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 .cwSummaryMetricValue {
   display: block;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .cwSummaryCardFoot {
-  margin: 8px 0 0;
-  font-size: 12px;
-  opacity: 0.85;
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #64748b;
   line-height: 1.4;
 }
 
 .cwSummaryCardLink {
-  margin-top: 10px;
+  margin-top: 12px;
   align-self: flex-start;
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  background: rgba(15, 23, 42, 0.85);
-  color: #e5e7eb;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition: all 0.15s ease;
 }
 .cwSummaryCardLink:hover {
-  background: #f97316;
-  border-color: #fed7aa;
-  color: #111827;
-  transform: translateY(-1px);
-}
-
-.cwSectionTitleCentered {
-  text-align: center;
-  font-size: 1.4rem;
-  font-weight: 900;
-  color: var(--cw-text-main);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 16px 0;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--cw-border);
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 /* ---------------------------------------------------
