@@ -1203,7 +1203,7 @@
       });
   }
 
-  // ------------------------------------------------------------------------
+   // ------------------------------------------------------------------------
   // 10. Summary View (With Embedded Charts)
   // ------------------------------------------------------------------------
   function renderSummary(allRows) {
@@ -1315,16 +1315,44 @@
       '  </div>' +
       '</div>';
 
+       // -- COMPLIANCE FILTER LOGIC --
+    var defaultFrameworks = [
+      "AWS-Foundational-Security-Best-Practices",
+      "AWS-Foundational-Technical-Review",
+      "AWS-Well-Architected-Framework-Security-Pillar",
+      "PCI-3.2.1",
+      "SOC2"
+    ];
+
+    var storedStr = localStorage.getItem("cw_framework_prefs");
+    var storedFwPref = storedStr ? JSON.parse(storedStr) : defaultFrameworks;
+
     var complianceHtml = "";
     if (fwList && fwList.length) {
+      
+      var filterOptionsHtml = fwList.map(function(fw) {
+        var isChecked = storedFwPref.includes(fw.id) ? "checked" : "";
+        return '<label class="cwFwCheckbox"><input type="checkbox" value="' + fw.id + '" ' + isChecked + '> <span>' + fw.name + '</span></label>';
+      }).join("");
+
+      var filterUIHtml = 
+        '<div class="cwFwFilterWrap">' +
+        '  <button class="cwFwFilterBtn" id="fwFilterBtn">Filter Frameworks ▾</button>' +
+        '  <div class="cwFwFilterDropdown" id="fwFilterDropdown">' +
+        '    <div class="cwFwFilterHeader"><button id="fwFilterClear" class="cwBtn" style="padding:4px 8px; font-size:10px;">Clear All</button> <button id="fwFilterAll" class="cwBtn" style="padding:4px 8px; font-size:10px;">Select All</button></div>' +
+        '    <div class="cwFwFilterList">' + filterOptionsHtml + '</div>' +
+        '  </div>' +
+        '</div>';
+
       var cardsHtml = fwList.map(function (fw) {
         var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
         var postureClass = passRateFw >= 90 ? "cwSummaryPill-good" : (passRateFw >= 70 ? "cwSummaryPill-fair" : "cwSummaryPill-warn");
         var postureLabelFw = passRateFw >= 90 ? "Strong" : (passRateFw >= 70 ? "Fair" : "Needs attention");
         var failLabel = (fw.highFail + fw.criticalFail === 0) ? "No high or critical failing controls" : fw.criticalFail + " critical, " + fw.highFail + " high failing controls";
+        var displayStyle = storedFwPref.includes(fw.id) ? "flex" : "none";
 
         return (
-          '<article class="cwSummaryCard-fw" data-fw-id="' + (fw.id || "") + '">' +
+          '<article class="cwSummaryCard-fw" data-fw-id="' + (fw.id || "") + '" style="display:' + displayStyle + ';">' +
           '  <header class="cwSummaryCardHead">' +
           '    <h3 class="cwSummaryCardTitle" title="' + fw.name + '">' + fw.name + '</h3>' +
           '    <span class="cwSummaryPill ' + postureClass + '">' + postureLabelFw + '</span>' +
@@ -1336,8 +1364,17 @@
           '    </div>' +
           '  </div>' +
           '  <div class="cwSummaryCardMetrics">' +
-          '    <div class="cwSummaryMetric"><span class="cwSummaryMetricLabel">Controls</span><span class="cwSummaryMetricValue">' + fw.pass + '/' + fw.total + '</span></div>' +
-          '    <div class="cwSummaryMetric"><span class="cwSummaryMetricLabel">High / critical</span><span class="cwSummaryMetricValue">' + fw.highFail + ' / ' + fw.criticalFail + '</span></div>' +
+          '    <div class="cwSummaryMetric">' +
+          '      <span class="cwSummaryMetricLabel">Controls</span>' +
+          '      <span class="cwSummaryMetricValue">' + fw.pass + '/' + fw.total + '</span>' +
+          '    </div>' +
+          '    <div class="cwSummaryMetric">' +
+          '      <span class="cwSummaryMetricLabel">High / Critical</span>' +
+          '      <span class="cwSummaryMetricValue">' +
+          '        <span style="color:#ef4444;">' + fw.highFail + '</span> / ' +
+          '        <span style="color:#f97316;">' + fw.criticalFail + '</span>' +
+          '      </span>' +
+          '    </div>' +
           '  </div>' +
           '  <p class="cwSummaryCardFoot">' + failLabel + '</p>' +
           '  <button type="button" class="cwSummaryCardLink" data-fw-id="' + (fw.id || "") + '">View failing checks</button>' +
@@ -1347,13 +1384,15 @@
 
       complianceHtml =
         '<div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">' +
-        '  <h2 class="cwSectionTitleCentered">Compliance Snapshot</h2>' +
-        '  <div class="cwSummaryGrid-fw">' + cardsHtml + '  </div>' +
+        '  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">' +
+        '    <h2 class="cwSectionTitleCentered" style="border:none; padding:0; margin:0;">Compliance Snapshot</h2>' +
+        filterUIHtml +
+        '  </div>' +
+        '  <div class="cwSummaryGrid-fw" id="fwGridContainer">' + cardsHtml + '  </div>' +
         '</div>';
     }
 
-       // -------- 10C. Final Render HTML --------
-    // Calculate total unique services with failures for the new KPI
+    // -------- 10C. Final Render HTML & Events --------
     var failingServicesCount = Object.keys(byService).length;
 
     host.innerHTML =
@@ -1364,20 +1403,74 @@
       '  </div>' +
       '  <div class="cwSummaryHeader-pill">' + postureLabel + ' posture</div>' +
       '</div>' +
-      
-      // New 4-Box KPI Grid
       '<div class="cwSummaryGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">' +
       '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue" style="color:#16a34a;">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' total controls</div></div>' +
       '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
       '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High / Critical Risks</div><div class="cwSummaryValue" style="color:#dc2626;">' + (highFail + criticalFail) + '</div><div class="cwSummarySub">Require immediate action</div></div>' +
       '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Services Impacted</div><div class="cwSummaryValue" style="color:#d97706;">' + failingServicesCount + '</div><div class="cwSummarySub">AWS services with findings</div></div>' +
       '</div>' +
-      
       chartsHtml + 
       complianceHtml;
 
+    // Clean up old event listeners to prevent duplicate triggers
+    if (host._cwFilterBound) {
+      host.removeEventListener('click', host._cwFilterBound);
+      host.removeEventListener('change', host._cwChangeBound);
+    }
+
+    function applyFwFilter() {
+      const checks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
+      const cards = host.querySelectorAll(".cwSummaryCard-fw");
+      
+      const selected = Array.from(checks).filter(c => c.checked).map(c => c.value);
+      localStorage.setItem("cw_framework_prefs", JSON.stringify(selected));
+
+      cards.forEach(card => {
+        const id = card.getAttribute("data-fw-id");
+        card.style.display = selected.includes(id) ? "flex" : "none";
+      });
+    }
+
+    // Event Delegation: Attach to the main container, not the volatile inner elements
+    host._cwFilterBound = function(e) {
+      const btn = e.target.closest('#fwFilterBtn');
+      const drop = document.getElementById('fwFilterDropdown');
+      
+      if (btn && drop) {
+        e.stopPropagation();
+        drop.style.display = drop.style.display === "block" ? "none" : "block";
+        return;
+      }
+
+      if (e.target.closest('#fwFilterClear')) {
+        host.querySelectorAll(".cwFwCheckbox input[type='checkbox']").forEach(c => c.checked = false);
+        applyFwFilter();
+        return;
+      }
+
+      if (e.target.closest('#fwFilterAll')) {
+        host.querySelectorAll(".cwFwCheckbox input[type='checkbox']").forEach(c => c.checked = true);
+        applyFwFilter();
+        return;
+      }
+
+      if (drop && !e.target.closest('#fwFilterDropdown')) {
+        drop.style.display = "none";
+      }
+    };
+
+    host._cwChangeBound = function(e) {
+      if (e.target.matches(".cwFwCheckbox input[type='checkbox']")) {
+        applyFwFilter();
+      }
+    };
+
+    host.addEventListener('click', host._cwFilterBound);
+    host.addEventListener('change', host._cwChangeBound);
+
     // -------- 10D. Render Chart.js Canvases --------
     if (window.Chart) {
+      // 1. Severity Bar Chart
       destroyIfExists("sumSeverityBar");
       if ($("sumSeverityBar")) {
         window.sumSeverityBar = new Chart($("sumSeverityBar"), {
@@ -1386,7 +1479,8 @@
             labels: ["Critical", "High", "Medium", "Low"],
             datasets: [{ 
               data: [severities.critical, severities.high, severities.medium, severities.low], 
-              backgroundColor: ["#7a0916", "#ef4444", "#f59e0b", "#22c55e"], 
+              // Colors: Critical=Red, High=Orange, Medium=Vibrant Yellow, Low=Green
+              backgroundColor: ["#ef4444", "#f97316", "#eab308", "#22c55e"], 
               borderRadius: 4 
             }]
           },
@@ -1396,6 +1490,7 @@
 
       const failedRows = allRows.filter(r => String(r.STATUS).toUpperCase() === "FAIL");
 
+      // 2. Top Failing Services Stacked Bar Chart
       const svcStats = {};
       failedRows.forEach(r => {
         const svc = String(r.SERVICE_NAME || "Other").trim();
@@ -1417,9 +1512,9 @@
           data: { 
             labels: sortedSvc.map(s => s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name),
             datasets: [
-              { label: "Critical", data: sortedSvc.map(s => s.stats.critical), backgroundColor: "#7a0916" },
-              { label: "High", data: sortedSvc.map(s => s.stats.high), backgroundColor: "#ef4444" },
-              { label: "Medium", data: sortedSvc.map(s => s.stats.medium), backgroundColor: "#f59e0b" },
+              { label: "Critical", data: sortedSvc.map(s => s.stats.critical), backgroundColor: "#ef4444" },
+              { label: "High", data: sortedSvc.map(s => s.stats.high), backgroundColor: "#f97316" },
+              { label: "Medium", data: sortedSvc.map(s => s.stats.medium), backgroundColor: "#eab308" },
               { label: "Low", data: sortedSvc.map(s => s.stats.low), backgroundColor: "#22c55e" }
             ]
           },
@@ -1431,6 +1526,7 @@
         });
       }
 
+      // 3. Top Failing Regions Stacked Bar Chart
       const regStats = {};
       failedRows.forEach(r => {
         const reg = String(r.REGION || "global").trim();
@@ -1452,9 +1548,9 @@
           data: { 
             labels: sortedReg.map(s => s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name),
             datasets: [
-              { label: "Critical", data: sortedReg.map(s => s.stats.critical), backgroundColor: "#7a0916" },
-              { label: "High", data: sortedReg.map(s => s.stats.high), backgroundColor: "#ef4444" },
-              { label: "Medium", data: sortedReg.map(s => s.stats.medium), backgroundColor: "#f59e0b" },
+              { label: "Critical", data: sortedReg.map(s => s.stats.critical), backgroundColor: "#ef4444" },
+              { label: "High", data: sortedReg.map(s => s.stats.high), backgroundColor: "#f97316" },
+              { label: "Medium", data: sortedReg.map(s => s.stats.medium), backgroundColor: "#eab308" },
               { label: "Low", data: sortedReg.map(s => s.stats.low), backgroundColor: "#22c55e" }
             ]
           },

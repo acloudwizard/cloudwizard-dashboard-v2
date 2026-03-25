@@ -471,6 +471,7 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   margin-top: 8px;
+  min-height: 300px; /* Prevents container from collapsing when all cards are hidden */
 }
 
 @media (min-width: 1280px) {
@@ -603,4 +604,73 @@ body {
   .cwHeroSubtitle { font-size: 0.9rem !important; }
   .cwHeroCta { flex-direction: column; align-items: flex-start; }
   .cwHeroCtaText { max-width: 100%; }
+}
+
+/* ---------------------------------------------------
+   Framework Filter Dropdown
+   --------------------------------------------------- */
+.cwFwFilterWrap {
+  position: relative;
+  display: inline-block;
+}
+
+.cwFwFilterBtn {
+  background: var(--cw-bg-alt);
+  border: 1px solid var(--cw-border-dark);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cw-text-main);
+  cursor: pointer;
+}
+
+.cwFwFilterDropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1px solid var(--cw-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  width: 280px;
+  z-index: 100;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.cwFwFilterHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--cw-border);
+  position: sticky;
+  top: 0;
+}
+
+.cwFwFilterList {
+  padding: 8px 0;
+}
+
+.cwFwCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cw-text-main);
+  transition: background 0.1s;
+}
+
+.cwFwCheckbox:hover {
+  background: #f1f5f9;
+}
+
+.cwFwCheckbox input {
+  cursor: pointer;
 }
