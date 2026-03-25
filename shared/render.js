@@ -1203,236 +1203,231 @@
       });
   }
 
+    // ------------------------------------------------------------------------
+  // 10. Summary View
   // ------------------------------------------------------------------------
-// 10. Summary Dashboard - Security + Compliance Snapshot
-// ------------------------------------------------------------------------
-function renderSummary(allRows) {
-  var host =
-    document.getElementById("viewSummaryInner") ||
-    document.getElementById("viewSummary");
-  if (!host) return;
+  function renderSummary(allRows) {
+    const host = $("viewSummaryInner");
+    if (!host) return;
 
-  allRows = Array.isArray(allRows) ? allRows : [];
+    // -------- 10A. Data Processing --------
+    var totalChecks = allRows.length;
+    var counts = countStatuses(allRows);
+    var failCount = counts.FAIL || 0;
+    var passCount = counts.PASS || 0;
+    
+    var severities = countSeverities(allRows);
+    var criticalFail = severities.critical || 0;
+    var highFail = severities.high || 0;
+    
+    var passRate = totalChecks > 0 ? (passCount / totalChecks) * 100 : 0;
+    var postureLabel = "Needs attention";
+    if (passRate >= 90) postureLabel = "Strong";
+    else if (passRate >= 70) postureLabel = "Fair";
 
-  // --- BASIC SECURITY METRICS ---
-  var totalChecks = allRows.length;
-  var passCount = 0;
-  var failCount = 0;
-  var criticalFail = 0;
-  var highFail = 0;
-  var byService = {}; // { serviceName: { critical, high, totalFail } }
+    // Build byService and topServices
+    var byService = {};
+    allRows.forEach(function(r) {
+      if (String(r.STATUS).toUpperCase() === 'FAIL') {
+        var svc = String(r.SERVICE_NAME || r.SERVICE || "Unknown").trim();
+        var sev = norm(r.SEVERITY);
+        if (!byService[svc]) byService[svc] = { critical: 0, high: 0, totalFail: 0 };
+        byService[svc].totalFail++;
+        if (sev === 'critical') byService[svc].critical++;
+        if (sev === 'high') byService[svc].high++;
+      }
+    });
 
-  allRows.forEach(function (r) {
-    var status = String(r.STATUS || r.Status || "").toUpperCase();
-    var sev = String(r.SEVERITY || r.Severity || "").toLowerCase();
-    var svc = String(r.SERVICE_NAME || r.SERVICENAME || r.SERVICE || r.Service || "Unknown").trim();
-    if (!svc) svc = "Unknown";
-
-    if (status === "PASS") {
-      passCount++;
-      return;
-    }
-    if (status !== "FAIL") return;
-
-    failCount++;
-
-    if (!byService[svc]) {
-      byService[svc] = { critical: 0, high: 0, totalFail: 0 };
-    }
-    byService[svc].totalFail++;
-
-    if (sev === "critical") {
-      criticalFail++;
-      byService[svc].critical++;
-    } else if (sev === "high") {
-      highFail++;
-      byService[svc].high++;
-    }
-  });
-
-  var passRate = totalChecks
-    ? Math.round((passCount / totalChecks) * 100)
-    : 0;
-
-  var postureLabel = "Needs Attention";
-  if (passRate >= 90) postureLabel = "Strong";
-  else if (passRate >= 70) postureLabel = "Fair";
-
-  // --- TOP SERVICES WITH RISK ---
-  var topServices = Object.keys(byService)
-    .map(function (svc) {
-      var m = byService[svc];
+    var topServices = Object.keys(byService).map(function(svc) {
       return {
         name: svc,
-        critical: m.critical,
-        high: m.high,
-        totalFail: m.totalFail
+        critical: byService[svc].critical,
+        high: byService[svc].high,
+        totalFail: byService[svc].totalFail
       };
-    })
-    .sort(function (a, b) {
-      var aScore = a.critical * 100 + a.high * 10 + a.totalFail;
-      var bScore = b.critical * 100 + b.high * 10 + b.totalFail;
-      return bScore - aScore;
-    })
-    .slice(0, 3);
+    }).sort(function(a, b) {
+      return (b.critical * 100 + b.high * 10 + b.totalFail) - 
+             (a.critical * 100 + a.high * 10 + a.totalFail);
+    }).slice(0, 5);
 
-  var topServicesHtml = "";
-  if (topServices.length) {
-    topServicesHtml =
-      '<div class="cwSummaryCard" style="margin-top:12px;">' +
-      '  <div class="cwSummaryLabel">Top services with risk</div>' +
-      '  <ul class="cwSummaryList">';
-    topServices.forEach(function (s) {
-      topServicesHtml +=
-        "<li>" +
-        s.name +
-        " – " +
-        s.critical +
-        " critical / " +
-        s.high +
-        " high failing checks</li>";
+    // Build frameworkStats and fwList
+    var frameworkStats = {};
+    allRows.forEach(function(r) {
+      var fws = extractFrameworksFromCell(r.COMPLIANCE);
+      var isPass = String(r.STATUS).toUpperCase() === 'PASS';
+      var isFail = String(r.STATUS).toUpperCase() === 'FAIL';
+      var sev = norm(r.SEVERITY);
+
+      fws.forEach(function(fw) {
+        if (!frameworkStats[fw]) {
+          frameworkStats[fw] = { total: 0, pass: 0, fail: 0, highFail: 0, criticalFail: 0 };
+        }
+        frameworkStats[fw].total++;
+        if (isPass) frameworkStats[fw].pass++;
+        if (isFail) {
+          frameworkStats[fw].fail++;
+          if (sev === 'critical') frameworkStats[fw].criticalFail++;
+          if (sev === 'high') frameworkStats[fw].highFail++;
+        }
+      });
     });
-    topServicesHtml += "  </ul></div>";
-  }
 
-  // --- COMPLIANCE SNAPSHOT (ALL FRAMEWORKS, ALPHABETICAL, 6 PER ROW) ---
-  function extractFrameworksFromCellSummary(cell) {
-    var s = String(cell || "").trim();
-    if (!s) return [];
-    return s
-      .split("|")
-      .map(function (p) { return p.trim(); })
-      .map(function (p) { return p.split(":")[0].trim(); })
-      .filter(Boolean);
-  }
-
-  var frameworkStats = {}; // { fw: { total, pass } }
-  allRows.forEach(function (r) {
-    var status = String(r.STATUS || r.Status || "").toUpperCase();
-    var fws = extractFrameworksFromCellSummary(r.COMPLIANCE || r.Compliance);
-    if (!fws.length) return;
-    fws.forEach(function (fw) {
-      if (!frameworkStats[fw]) {
-        frameworkStats[fw] = { total: 0, pass: 0 };
-      }
-      frameworkStats[fw].total++;
-      if (status === "PASS") {
-        frameworkStats[fw].pass++;
-      }
-    });
-  });
-
-  var fwList = Object.keys(frameworkStats)
-    .map(function (fw) {
-      var stat = frameworkStats[fw];
-      var pct = stat.total
-        ? Math.round((stat.pass / stat.total) * 100)
-        : 0;
-      return { name: fw, pct: pct, total: stat.total };
-    })
-    .sort(function (a, b) {
+    var fwList = Object.keys(frameworkStats).map(function(fwName) {
+      var stats = frameworkStats[fwName];
+      var pr = stats.total > 0 ? (stats.pass / stats.total) * 100 : 0;
+      return {
+        id: fwName,
+        name: fwName,
+        passRate: pr,
+        total: stats.total,
+        pass: stats.pass,
+        fail: stats.fail,
+        highFail: stats.highFail,
+        criticalFail: stats.criticalFail
+      };
+    }).sort(function(a, b) {
       return a.name.localeCompare(b.name);
     });
 
-  var complianceHtml = "";
-  if (fwList.length) {
-    complianceHtml =
-      '<div class="cwSummaryCard cwSummaryCompliance" style="margin-top:12px;">' +
-      '  <div class="cwSummaryLabel">Compliance snapshot (all frameworks)</div>' +
-      '  <div class="cwSummaryComplianceGrid cwSummaryComplianceGrid-6">';
-    fwList.forEach(function (fw) {
-      var bandClass =
-        fw.pct >= 80
-          ? "cwSummaryCompliance-good"
-          : fw.pct >= 60
-          ? "cwSummaryCompliance-warn"
-          : "cwSummaryCompliance-bad";
+     // -------- 10B. HTML Generators --------
+    var topServicesHtml = "";
+    if (topServices && topServices.length) {
+      topServicesHtml =
+        '<div class="cwSummaryCard" style="margin-top:12px;">' +
+        '  <div class="cwSummaryLabel">Top services with risk</div>' +
+        '  <ul class="cwSummaryList">';
+      topServices.forEach(function (s) {
+        topServicesHtml += "<li>" + s.name + " – " + s.critical + " critical / " + s.high + " high failing checks</li>";
+      });
+      topServicesHtml += "  </ul></div>";
+    }
 
-      var summaryText =
-        fw.pct +
-        "% of " +
-        fw.total +
-        " mapped checks are passing for " +
-        fw.name +
-        ".";
+    var criticalSummaryHtml = "";
+    if (criticalFail > 0) {
+      var criticalServices = Object.keys(byService || {})
+        .map(function (svc) {
+          var m = byService[svc];
+          return { name: svc, critical: m.critical, high: m.high, totalFail: m.totalFail };
+        })
+        .filter(function (s) { return s.critical > 0; })
+        .sort(function (a, b) { return (b.critical * 100 + b.high * 10 + b.totalFail) - (a.critical * 100 + a.high * 10 + a.totalFail); })
+        .slice(0, 5);
 
-      complianceHtml +=
-        '<div class="cwSummaryComplianceItem" title="' +
-        summaryText +
-        '">' +
-        '  <div class="cwSummaryComplianceName">' +
-        fw.name +
-        "</div>" +
-        '  <div class="cwSummaryCompliancePct ' +
-        bandClass +
-        '">' +
-        fw.pct +
-        "%</div>" +
-        "</div>";
-    });
-    complianceHtml +=
-      "  </div>" +
-      '  <div class="cwSummaryComplianceHint">Hover any framework to see its high-level score details. Full breakdowns live in the paid Compliance Explorer.</div>' +
-      "</div>";
+      var criticalListHtml = "";
+      if (criticalServices.length) {
+        criticalListHtml = '<ul class="cwSummaryList" style="margin-top:8px;">' +
+          criticalServices.map(function (s) {
+            return "<li>" + s.name + " – " + s.critical + " critical, " + s.high + " high failing checks</li>";
+          }).join("") + "</ul>";
+      }
+
+      criticalSummaryHtml =
+        '<div class="cwSummaryCard" style="margin-top:12px;">' +
+        '  <div class="cwSummaryLabel">Critical risks summary</div>' +
+        '  <div class="cwSummaryBody">' +
+        '    You currently have <span class="cwSummaryEmphasis">' + criticalFail + "</span> failing critical checks. " +
+        "    Most of these are concentrated in your top risk services above. Tackle those first, then move on to high risks." +
+        "  </div>" + criticalListHtml + "</div>";
+    }
+
+       // Compliance snapshot – Original Dark Blue Design
+    var complianceHtml = "";
+    if (fwList && fwList.length) {
+      var cardsHtml = fwList.map(function (fw) {
+        var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
+        var totalFw = fw.total || 0;
+        var passFw = fw.pass || 0;
+        var highFailFw = fw.highFail || 0;
+        var criticalFailFw = fw.criticalFail || 0;
+
+        var postureLabelFw = "Needs attention";
+        var postureClass = "cwSummaryPill-warn";
+
+        if (passRateFw >= 90) {
+          postureLabelFw = "Strong";
+          postureClass = "cwSummaryPill-good";
+        } else if (passRateFw >= 70) {
+          postureLabelFw = "Fair";
+          postureClass = "cwSummaryPill-fair";
+        }
+
+        var failLabel =
+          highFailFw + criticalFailFw === 0
+            ? "No high or critical failing controls"
+            : criticalFailFw + " critical, " + highFailFw + " high failing controls";
+
+        return (
+          '<article class="cwSummaryCard-fw" data-fw-id="' + (fw.id || "") + '">' +
+          '  <header class="cwSummaryCardHead">' +
+          '    <h3 class="cwSummaryCardTitle" title="' + fw.name + '">' + fw.name + '</h3>' +
+          '    <span class="cwSummaryPill ' + postureClass + '">' + postureLabelFw + '</span>' +
+          '  </header>' +
+
+          '  <div class="cwSummaryCardBarWrap">' +
+          '    <span class="cwSummaryCardBarLabel">' + passRateFw.toFixed(0) + '% passed</span>' +
+          '    <div class="cwSummaryCardBarTrack">' +
+          '      <div class="cwSummaryCardBarFill cwSummaryCardBarFill-' +
+                 (passRateFw >= 90 ? "good" : passRateFw >= 70 ? "fair" : "bad") +
+          '" style="width:' + passRateFw.toFixed(0) + '%;"></div>' +
+          '    </div>' +
+          '  </div>' +
+
+          '  <div class="cwSummaryCardMetrics">' +
+          '    <div class="cwSummaryMetric">' +
+          '      <span class="cwSummaryMetricLabel">Controls</span>' +
+          '      <span class="cwSummaryMetricValue">' + passFw + '/' + totalFw + '</span>' +
+          '    </div>' +
+          '    <div class="cwSummaryMetric">' +
+          '      <span class="cwSummaryMetricLabel">High / critical</span>' +
+          '      <span class="cwSummaryMetricValue">' + highFailFw + ' / ' + criticalFailFw + '</span>' +
+          '    </div>' +
+          '  </div>' +
+
+          '  <p class="cwSummaryCardFoot">' + failLabel + '</p>' +
+
+          '  <button type="button" class="cwSummaryCardLink" data-fw-id="' + (fw.id || "") + '">' +
+          '    View failing checks' +
+          '  </button>' +
+          '</article>'
+        );
+      }).join("");
+
+           complianceHtml =
+        '<div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">' +
+        '  <h2 class="cwSectionTitleCentered">Compliance Snapshot</h2>' +
+        '  <div class="cwSummaryGrid-fw">' +
+             cardsHtml +
+        '  </div>' +
+        '</div>';
+    }
+    // -------- 10C. Final Render --------
+    host.innerHTML =
+      '<div class="cwSummaryHeader">' +
+      '  <div class="cwSummaryHeader-main">' +
+      '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
+      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage. Deeper triage and fix guidance are available in the full CloudWizard dashboard.</div>' +
+      '  </div>' +
+      '  <div class="cwSummaryHeader-pill">' + postureLabel + ' posture</div>' +
+      '</div>' +
+      '<div class="cwSummaryGrid">' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' controls</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Critical Risks</div><div class="cwSummaryValue cwSummaryValue-critical">' + criticalFail + '</div><div class="cwSummarySub">Failing critical checks</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High Risks</div><div class="cwSummaryValue cwSummaryValue-high">' + highFail + '</div><div class="cwSummarySub">Failing high checks</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
+      '</div>' +
+      topServicesHtml +
+      criticalSummaryHtml +
+      complianceHtml +
+      '<div class="cwSummaryCard" style="margin-top:12px;">' +
+      '  <div class="cwSummaryLabel">What this free summary shows</div>' +
+      '  <ul class="cwSummaryList">' +
+      '    <li>Your overall pass rate and current risk level.</li>' +
+      '    <li>How many critical and high risks are still open.</li>' +
+      '    <li>Which services and frameworks are driving most of the risk.</li>' +
+      '  </ul>' +
+      '  <div class="cwSummaryUpgradeHint">For full-service drill-down, remediation steps, and detailed framework views, upgrade to the full CloudWizard Security & Compliance Dashboard.</div>' +
+      '</div>';
   }
-
-  // --- FINAL RENDER ---
-  host.innerHTML =
-    '<div class="cwSummaryHeader">' +
-    '  <div class="cwSummaryHeader-main">' +
-    '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
-    '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage. Deeper triage and fix guidance are available in the full CloudWizard dashboard.</div>' +
-    "  </div>" +
-    '  <div class="cwSummaryHeader-pill">' +
-    postureLabel +
-    " posture" +
-    "  </div>" +
-    "</div>" +
-    '<div class="cwSummaryGrid">' +
-    '  <div class="cwSummaryCard">' +
-    '    <div class="cwSummaryLabel">Checks Passed</div>' +
-    '    <div class="cwSummaryValue">' +
-    passRate +
-    "%</div>" +
-    '    <div class="cwSummarySub">of ' +
-    totalChecks +
-    " controls</div>" +
-    "  </div>" +
-    '  <div class="cwSummaryCard">' +
-    '    <div class="cwSummaryLabel">Critical Risks</div>' +
-    '    <div class="cwSummaryValue cwSummaryValue-critical">' +
-    criticalFail +
-    "</div>" +
-    '    <div class="cwSummarySub">Failing critical checks</div>"' +
-    "  </div>" +
-    '  <div class="cwSummaryCard">' +
-    '    <div class="cwSummaryLabel">High Risks</div>' +
-    '    <div class="cwSummaryValue cwSummaryValue-high">' +
-    highFail +
-    "</div>" +
-    '    <div class="cwSummarySub">Failing high checks</div>' +
-    "  </div>" +
-    '  <div class="cwSummaryCard">' +
-    '    <div class="cwSummaryLabel">Open Findings</div>' +
-    '    <div class="cwSummaryValue">' +
-    failCount +
-    "</div>" +
-    '    <div class="cwSummarySub">Total failing controls</div>' +
-    "  </div>" +
-    "</div>" +
-    topServicesHtml +
-    complianceHtml +
-    '<div class="cwSummaryCard" style="margin-top:12px;">' +
-    '  <div class="cwSummaryLabel">What this free summary shows</div>' +
-    '  <ul class="cwSummaryList">' +
-    "    <li>Your overall pass rate and current risk level.</li>" +
-    "    <li>How many critical and high risks are still open.</li>" +
-    "    <li>Which services and frameworks are driving most of the risk.</li>" +
-    "  </ul>" +
-    '  <div class="cwSummaryUpgradeHint">For full-service drill-down, remediation steps, and detailed framework views, upgrade to the full CloudWizard Security & Compliance Dashboard.</div>' +
-    "</div>";
-}
-
   // ------------------------------------------------------------------------
   // 11. Auto-start & Exports
   // ------------------------------------------------------------------------

@@ -6,10 +6,16 @@
  */
 
 (function () {
+  // ---------------------------------------------------------------------------
+  // Small DOM helper
+  // ---------------------------------------------------------------------------
   function $(id) {
     return document.getElementById(id);
   }
 
+  // ---------------------------------------------------------------------------
+  // Hero: title, subtitle, environment badge
+  // ---------------------------------------------------------------------------
   function initHeroFromConfig() {
     const conf = window.CWCONFIG || {};
     const envEl = $("cwEnvironmentBadge");
@@ -21,6 +27,9 @@
     if (subtitleEl) subtitleEl.textContent = conf.description || "";
   }
 
+  // ---------------------------------------------------------------------------
+  // Tabs: Summary / Security / Compliance
+  // ---------------------------------------------------------------------------
   function initTabs() {
     const tabSummary = $("tabSummary");
     const tabOverview = $("tabOverview");
@@ -37,9 +46,13 @@
     let securityRendered = false;
     let complianceRendered = false;
 
+    function currentRows() {
+      return window.__cwAllRows || window.allRows || [];
+    }
+
     function ensureSecurityRendered() {
       if (securityRendered) return;
-      const rows = window.__cwAllRows || window.allRows || [];
+      const rows = currentRows();
       if (typeof renderOverview === "function" && rows.length) {
         renderOverview(rows);
         securityRendered = true;
@@ -48,7 +61,7 @@
 
     function ensureComplianceRendered() {
       if (complianceRendered) return;
-      const rows = window.__cwAllRows || window.allRows || [];
+      const rows = currentRows();
       if (typeof renderCompliance === "function" && rows.length) {
         renderCompliance(rows);
         complianceRendered = true;
@@ -56,41 +69,39 @@
     }
 
     function ensureSummaryRendered() {
-  const rows = window.__cwAllRows || window.allRows || [];
-  const inner = document.getElementById("viewSummaryInner") || viewSummary;
+      const rows = currentRows();
+      const inner = document.getElementById("viewSummaryInner") || viewSummary;
 
-  if (typeof renderSummary === "function" && rows.length) {
-    inner.innerHTML = "";
-    renderSummary(rows);
-  } else if (!inner.innerHTML) {
-    inner.innerHTML =
-      '<div class="card" style="padding:16px;">Summary tab coming soon.</div>';
-  }
-}
+      if (typeof renderSummary === "function" && rows.length) {
+        inner.innerHTML = "";
+        renderSummary(rows);
+      } else if (!inner.innerHTML) {
+        inner.innerHTML =
+          '<div class="card" style="padding:16px;">Summary tab coming soon.</div>';
+      }
+    }
 
+    function activate(target) {
+      const tabs = [tabSummary, tabOverview, tabCompliance];
+      const views = [viewSummary, viewOverview, viewCompliance];
 
+      tabs.forEach((t) => t.classList.remove("cwTabActive"));
+      views.forEach((v) => v.classList.add("cwViewHidden"));
 
-function activate(target) {
-  const tabs = [tabSummary, tabOverview, tabCompliance];
-  const views = [viewSummary, viewOverview, viewCompliance];
-
-  tabs.forEach((t) => t.classList.remove("cwTabActive"));
-  views.forEach((v) => v.classList.add("cwViewHidden"));
-
-  if (target === "summary") {
-    tabSummary.classList.add("cwTabActive");
-    viewSummary.classList.remove("cwViewHidden");
-    ensureSummaryRendered();
-  } else if (target === "security") {
-    tabOverview.classList.add("cwTabActive");
-    viewOverview.classList.remove("cwViewHidden");
-    ensureSecurityRendered();
-  } else if (target === "compliance") {
-    tabCompliance.classList.add("cwTabActive");
-    viewCompliance.classList.remove("cwViewHidden");
-    ensureComplianceRendered();
-  }
-}
+      if (target === "summary") {
+        tabSummary.classList.add("cwTabActive");
+        viewSummary.classList.remove("cwViewHidden");
+        ensureSummaryRendered();
+      } else if (target === "security") {
+        tabOverview.classList.add("cwTabActive");
+        viewOverview.classList.remove("cwViewHidden");
+        ensureSecurityRendered();
+      } else if (target === "compliance") {
+        tabCompliance.classList.add("cwTabActive");
+        viewCompliance.classList.remove("cwViewHidden");
+        ensureComplianceRendered();
+      }
+    }
 
     tabSummary.addEventListener("click", () => activate("summary"));
     tabOverview.addEventListener("click", () => activate("security"));
@@ -100,6 +111,9 @@ function activate(target) {
     activate("summary");
   }
 
+  // ---------------------------------------------------------------------------
+  // Demo modal: “Run New Scan”
+  // ---------------------------------------------------------------------------
   function initModal() {
     const modal = $("cwScanModal");
     const scanBtn = $("btnRequestScanCenter");
@@ -127,6 +141,9 @@ function activate(target) {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // CSV loading + Chart.js bootstrap
+  // ---------------------------------------------------------------------------
   function loadCsvAndRender() {
     const conf = window.CWCONFIG || {};
     const csvUrl = conf.csvUrl;
@@ -145,9 +162,7 @@ function activate(target) {
 
     fetch(csvUrl, { cache: "no-store" })
       .then((res) => {
-        if (!res.ok) {
-          throw new Error("CSV fetch failed, HTTP " + res.status);
-        }
+        if (!res.ok) throw new Error("CSV fetch failed, HTTP " + res.status);
         return res.text();
       })
       .then((text) => {
@@ -157,8 +172,7 @@ function activate(target) {
           parsed = parseDelimited(text, ",");
         }
 
-        const rowsRaw =
-          parsed && parsed.rows && parsed.rows.length ? parsed.rows : [];
+        const rowsRaw = parsed && parsed.rows && parsed.rows.length ? parsed.rows : [];
         const allRows = hydrateRowsWithMeta(rowsRaw);
 
         window.allRows = allRows;
@@ -176,7 +190,7 @@ function activate(target) {
             window.Chart.defaults.font.family = "Inter, system-ui, sans-serif";
           }
 
-          // Render Summary by default
+          // Render Summary by default (tabs will re-call as needed)
           if (typeof renderSummary === "function") {
             try {
               renderSummary(allRows);
@@ -202,6 +216,9 @@ function activate(target) {
       });
   }
 
+  // ---------------------------------------------------------------------------
+  // Triage state logging (for now)
+  // ---------------------------------------------------------------------------
   function restoreTriageState() {
     try {
       const raw = localStorage.getItem("cw_triage_state");
@@ -210,12 +227,19 @@ function activate(target) {
         return;
       }
       const parsed = JSON.parse(raw);
-      console.log("[CloudWizard] Triage state loaded with", Object.keys(parsed).length, "entries.");
+      console.log(
+        "[CloudWizard] Triage state loaded with",
+        Object.keys(parsed).length,
+        "entries."
+      );
     } catch (e) {
       console.warn("[CloudWizard] Failed to parse triage state from localStorage.", e);
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
   function boot() {
     console.log("[CloudWizard] app-v2 booting shell…");
     initHeroFromConfig();
