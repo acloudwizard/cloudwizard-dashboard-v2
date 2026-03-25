@@ -5,6 +5,42 @@
 
 (function () {
 
+ window.goToComplianceFramework = function(frameworkName) {
+  // 1. Switch to the Compliance Tab visually
+  const tabOverview = document.getElementById("tabOverview");
+  const tabCompliance = document.getElementById("tabCompliance");
+  const viewOverview = document.getElementById("viewOverview");
+  const viewCompliance = document.getElementById("viewCompliance");
+
+  if (tabOverview && tabCompliance && viewOverview && viewCompliance) {
+    tabCompliance.classList.add("cwTabActive");
+    tabOverview.classList.remove("cwTabActive");
+    
+    viewOverview.style.display = "none";
+    viewCompliance.style.display = "block";
+  }
+
+  // 2. Target the Compliance Explorer filters
+  const ceFramework = document.getElementById("ceFramework");
+  const ceStatus = document.getElementById("ceStatus"); 
+
+  if (ceFramework) {
+    // Set the specific framework
+    ceFramework.value = frameworkName;
+    
+    // Auto-set status to FAIL since they clicked "View Failing Checks"
+    if (ceStatus) {
+      ceStatus.value = "FAIL"; 
+    }
+
+    // Dispatch a change event to trigger your existing `rerender()` logic
+    ceFramework.dispatchEvent(new Event("change"));
+    
+    // Smooth scroll to the top so they see the KPIs instantly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}; 
+
   // ------------------------------------------------------------------------
   // 1. Utilities
   // ------------------------------------------------------------------------
@@ -882,31 +918,33 @@
         compliancePct >= 80 ? "#22c55e" : compliancePct >= 60 ? "#f59e0b" : "#ef4444";
       const fwDisplay = currentFramework ? escapeHtml(currentFramework) : "All Frameworks";
 
-      els.kpis.innerHTML = `
-  <div class="cwComplianceKpiGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; width:100%;">
-    <div class="cwFrameworkSummary" style="border: 1px solid rgba(255, 255, 255, 0.1); background-color:#22253D; box-shadow: 0 8px 20px -4px rgba(34, 37, 61, 0.3); grid-column: span 2; display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-radius: 12px;">
-      <div class="cwFrameworkSummary-header">
-        <div class="cwFrameworkSummary-label" style="font-size:12px; color:rgba(255,255,255,0.6); text-transform:uppercase; font-weight:800; letter-spacing:0.1em; margin-bottom:6px;">Framework</div>
-        <div class="cwFrameworkSummary-name" style="font-size:18px; font-weight:900; color:#FFFFFF; line-height:1.3; word-wrap:break-word; letter-spacing:-0.01em;">${fwDisplay}</div>
-      </div>
-      <div class="cwFrameworkSummary-scoreBlock" style="text-align:right;">
-        <div class="cwFrameworkSummary-scoreLabel" style="color:rgba(255,255,255,0.6); font-size:13px; font-weight: 800; text-transform:uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Compliance score</div>
-        <div class="cwFrameworkSummary-scoreValue" style="color:${pctColor}; font-size:42px; font-weight:900; line-height:1; text-shadow:0 2px 18px ${pctColor}55;">
-          ${compliancePct}%
+       els.kpis.innerHTML = `
+      <div class="cwComplianceKpiGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; width:100%;">
+        <div class="cwFrameworkSummary" style="border: 1px solid rgba(255, 255, 255, 0.1); background-color:#22253D; box-shadow: 0 8px 20px -4px rgba(34, 37, 61, 0.3); grid-column: span 2; display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-radius: 12px;">
+          <div class="cwFrameworkSummary-header">
+            <div class="cwFrameworkSummary-label" style="font-size:12px; color:rgba(255,255,255,0.6); text-transform:uppercase; font-weight:800; letter-spacing:0.1em; margin-bottom:6px;">Framework</div>
+            <div class="cwFrameworkSummary-name" style="font-size:18px; font-weight:900; color:#FFFFFF; line-height:1.3; word-wrap:break-word; letter-spacing:-0.01em;">${fwDisplay}</div>
+          </div>
+          <div class="cwFrameworkSummary-scoreBlock" style="text-align:right;">
+            <div class="cwFrameworkSummary-scoreLabel" style="color:rgba(255,255,255,0.6); font-size:13px; font-weight: 800; text-transform:uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Compliance score</div>
+            <div class="cwFrameworkSummary-scoreValue" style="color:${pctColor}; font-size:42px; font-weight:900; line-height:1; text-shadow:0 2px 18px ${pctColor}55;">
+              ${compliancePct}%
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div class="cwKpi cwComplianceKpi"><div class="cwKpiLabel">Total Rows</div><div class="cwKpiVal">${total}</div></div>
-    <div class="cwKpi cwComplianceKpi cwKpiFail"><div class="cwKpiLabel">Fail</div><div class="cwKpiVal">${c.FAIL}</div></div>
-    ${c.INVESTIGATING > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#cbd5e1; background:#f8fafc;"><div class="cwKpiLabel" style="color:#64748b;">Investigating</div><div class="cwKpiVal" style="color:#64748b;">${c.INVESTIGATING}</div></div>` : ""}
-    ${c.PENDING > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#fde047; background:#fef9c3;"><div class="cwKpiLabel" style="color:#ca8a04;">Pending Fix</div><div class="cwKpiVal" style="color:#ca8a04;">${c.PENDING}</div></div>` : ""}
-    ${c.FIXED > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#bbf7d0; background:#dcfce7;"><div class="cwKpiLabel" style="color:#16a34a;">Fixed</div><div class="cwKpiVal" style="color:#16a34a;">${c.FIXED}</div></div>` : ""}
-    ${c.IGNORED > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#e2e8f0; background:#f1f5f9;"><div class="cwKpiLabel" style="color:#94a3b8;">Ignored</div><div class="cwKpiVal" style="color:#94a3b8;">${c.IGNORED}</div></div>` : ""}
-    <div class="cwKpi cwComplianceKpi cwKpiPass"><div class="cwKpiLabel">Pass</div><div class="cwKpiVal">${c.PASS}</div></div>
-    <div class="cwKpi cwComplianceKpi cwKpiManual"><div class="cwKpiLabel">Manual</div><div class="cwKpiVal">${c.MANUAL}</div></div>
-  </div>
-`;
+        <div class="cwKpi cwComplianceKpi"><div class="cwKpiLabel">Total Rows</div><div class="cwKpiVal">${total || 0}</div></div>
+        <div class="cwKpi cwComplianceKpi cwKpiFail"><div class="cwKpiLabel">Fail</div><div class="cwKpiVal">${c.FAIL || 0}</div></div>
+        
+        ${(c.INVESTIGATING || 0) > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#cbd5e1; background:#f8fafc;"><div class="cwKpiLabel" style="color:#64748b;">Investigating</div><div class="cwKpiVal" style="color:#64748b;">${c.INVESTIGATING}</div></div>` : ""}
+        ${(c.PENDING || 0) > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#fde047; background:#fef9c3;"><div class="cwKpiLabel" style="color:#ca8a04;">Pending Fix</div><div class="cwKpiVal" style="color:#ca8a04;">${c.PENDING}</div></div>` : ""}
+        ${(c.FIXED || 0) > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#bbf7d0; background:#dcfce7;"><div class="cwKpiLabel" style="color:#16a34a;">Fixed</div><div class="cwKpiVal" style="color:#16a34a;">${c.FIXED}</div></div>` : ""}
+        ${(c.IGNORED || 0) > 0 ? `<div class="cwKpi cwComplianceKpi" style="border-color:#e2e8f0; background:#f1f5f9;"><div class="cwKpiLabel" style="color:#94a3b8;">Ignored</div><div class="cwKpiVal" style="color:#94a3b8;">${c.IGNORED}</div></div>` : ""}
+        
+        <div class="cwKpi cwComplianceKpi cwKpiPass"><div class="cwKpiLabel">Pass</div><div class="cwKpiVal">${c.PASS || 0}</div></div>
+        <div class="cwKpi cwComplianceKpi cwKpiManual"><div class="cwKpiLabel">Manual</div><div class="cwKpiVal">${c.MANUAL || 0}</div></div>
+      </div>
+    `;
     }
 
     function rerender() {
@@ -1144,7 +1182,7 @@
   }
 
   function boot() {
-    bindTabs();
+    // bindTabs();
     
     const conf = window.CWCONFIG || { 
       clientName: "Synthetic Data — No Customer Info", 
@@ -1264,153 +1302,164 @@
       return { id: fwName, name: fwName, passRate: pr, total: stats.total, pass: stats.pass, fail: stats.fail, highFail: stats.highFail, criticalFail: stats.criticalFail };
     }).sort(function(a, b) { return a.name.localeCompare(b.name); });
 
-    // -------- 10B. HTML Generators --------
-    var criticalSummaryHtml = "";
-    if (criticalFail > 0) {
-      var criticalServices = Object.keys(byService || {})
-        .map(function (svc) { return { name: svc, critical: byService[svc].critical, high: byService[svc].high, totalFail: byService[svc].totalFail }; })
-        .filter(function (s) { return s.critical > 0; })
-        .sort(function (a, b) { return (b.critical * 100 + b.high * 10 + b.totalFail) - (a.critical * 100 + a.high * 10 + a.totalFail); })
-        .slice(0, 5);
-
-      var criticalListHtml = "";
-      if (criticalServices.length) {
-        criticalListHtml = '<ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 0.8rem; color: #881337;">' +
-          criticalServices.map(function (s) {
-            return "<li style='margin-bottom:4px;'>" + s.name + " – " + s.critical + " critical</li>";
-          }).join("") + "</ul>";
-      }
-
-      criticalSummaryHtml =
-        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #fff1f2; border-color: #fecdd3;">' +
-        '  <div class="cwSummaryLabel" style="color: #be123c;">Critical Risks</div>' +
-        '  <div class="cwSummaryValue cwSummaryValue-critical" style="font-size: 32px; margin: 8px 0 4px;">' + criticalFail + '</div>' +
-        '  <div class="cwSummarySub" style="font-weight: 600; color: #be123c; margin-bottom: 8px;">Failing critical checks</div>' +
-        '  <div class="cwSummaryBody" style="font-size: 0.8rem; color: #881337;">Concentrated in your top services:</div>' + 
-        criticalListHtml + 
-        '</div>';
-    } else {
-      criticalSummaryHtml = 
-        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #f0fdf4; border-color: #bbf7d0;">' +
-        '  <div class="cwSummaryLabel" style="color: #15803d;">Critical Risks</div>' +
-        '  <div class="cwSummaryValue" style="font-size: 32px; margin: 8px 0 4px; color: #15803d;">0</div>' +
-        '  <div class="cwSummarySub" style="font-weight: 600; color: #166534;">No critical failing checks!</div>' +
-        '</div>';
-    }
-
-    var chartsHtml = 
-      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:16px;">' +
-      criticalSummaryHtml +
-      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
-      '    <div class="cwSummaryLabel">Failing by Severity</div>' +
-      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumSeverityBar"></canvas></div>' +
-      '  </div>' +
-      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
-      '    <div class="cwSummaryLabel">Top Failing Services</div>' +
-      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumServiceBar"></canvas></div>' +
-      '  </div>' +
-      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column;">' +
-      '    <div class="cwSummaryLabel">Top Failing Regions</div>' +
-      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>' +
-      '  </div>' +
-      '</div>';
-
-       // -- COMPLIANCE FILTER LOGIC --
-    var defaultFrameworks = [
-      "AWS-Foundational-Security-Best-Practices",
-      "AWS-Foundational-Technical-Review",
-      "AWS-Well-Architected-Framework-Security-Pillar",
-      "PCI-3.2.1",
-      "SOC2"
-    ];
-
-    var storedStr = localStorage.getItem("cw_framework_prefs");
-    var storedFwPref = storedStr ? JSON.parse(storedStr) : defaultFrameworks;
-
-    var complianceHtml = "";
-    if (fwList && fwList.length) {
+     // -------- 10B. HTML Generators --------
+  var criticalSummaryHtml = "";
+  if (criticalFail > 0) {
+    var criticalServices = Object.keys(byService)
+      .map(function (svc) {
+        return { name: svc, critical: byService[svc].critical, high: byService[svc].high, totalFail: byService[svc].totalFail };
+      })
+      .filter(function (s) {
+        return s.critical > 0;
+      })
+      .sort(function (a, b) {
+        return (b.critical * 100 + b.high * 10 + b.totalFail) - (a.critical * 100 + a.high * 10 + a.totalFail);
+      })
+      .slice(0, 5);
       
-      var filterOptionsHtml = fwList.map(function(fw) {
-        var isChecked = storedFwPref.includes(fw.id) ? "checked" : "";
-        return '<label class="cwFwCheckbox"><input type="checkbox" value="' + fw.id + '" ' + isChecked + '> <span>' + fw.name + '</span></label>';
-      }).join("");
-
-      var filterUIHtml = 
-        '<div class="cwFwFilterWrap">' +
-        '  <button class="cwFwFilterBtn" id="fwFilterBtn">Filter Frameworks ▾</button>' +
-        '  <div class="cwFwFilterDropdown" id="fwFilterDropdown">' +
-        '    <div class="cwFwFilterHeader"><button id="fwFilterClear" class="cwBtn" style="padding:4px 8px; font-size:10px;">Clear All</button> <button id="fwFilterAll" class="cwBtn" style="padding:4px 8px; font-size:10px;">Select All</button></div>' +
-        '    <div class="cwFwFilterList">' + filterOptionsHtml + '</div>' +
-        '  </div>' +
-        '</div>';
-
-      var cardsHtml = fwList.map(function (fw) {
-        var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
-        var postureClass = passRateFw >= 90 ? "cwSummaryPill-good" : (passRateFw >= 70 ? "cwSummaryPill-fair" : "cwSummaryPill-warn");
-        var postureLabelFw = passRateFw >= 90 ? "Strong" : (passRateFw >= 70 ? "Fair" : "Needs attention");
-        var failLabel = (fw.highFail + fw.criticalFail === 0) ? "No high or critical failing controls" : fw.criticalFail + " critical, " + fw.highFail + " high failing controls";
-        var displayStyle = storedFwPref.includes(fw.id) ? "flex" : "none";
-
-        return (
-          '<article class="cwSummaryCard-fw" data-fw-id="' + (fw.id || "") + '" style="display:' + displayStyle + ';">' +
-          '  <header class="cwSummaryCardHead">' +
-          '    <h3 class="cwSummaryCardTitle" title="' + fw.name + '">' + fw.name + '</h3>' +
-          '    <span class="cwSummaryPill ' + postureClass + '">' + postureLabelFw + '</span>' +
-          '  </header>' +
-          '  <div class="cwSummaryCardBarWrap">' +
-          '    <span class="cwSummaryCardBarLabel">' + passRateFw.toFixed(0) + '% passed</span>' +
-          '    <div class="cwSummaryCardBarTrack">' +
-          '      <div class="cwSummaryCardBarFill cwSummaryCardBarFill-' + (passRateFw >= 90 ? "good" : passRateFw >= 70 ? "fair" : "bad") + '" style="width:' + passRateFw.toFixed(0) + '%;"></div>' +
-          '    </div>' +
-          '  </div>' +
-          '  <div class="cwSummaryCardMetrics">' +
-          '    <div class="cwSummaryMetric">' +
-          '      <span class="cwSummaryMetricLabel">Controls</span>' +
-          '      <span class="cwSummaryMetricValue">' + fw.pass + '/' + fw.total + '</span>' +
-          '    </div>' +
-          '    <div class="cwSummaryMetric">' +
-          '      <span class="cwSummaryMetricLabel">High / Critical</span>' +
-          '      <span class="cwSummaryMetricValue">' +
-          '        <span style="color:#ef4444;">' + fw.highFail + '</span> / ' +
-          '        <span style="color:#f97316;">' + fw.criticalFail + '</span>' +
-          '      </span>' +
-          '    </div>' +
-          '  </div>' +
-          '  <p class="cwSummaryCardFoot">' + failLabel + '</p>' +
-          '  <button type="button" class="cwSummaryCardLink" data-fw-id="' + (fw.id || "") + '">View failing checks</button>' +
-          '</article>'
-        );
-      }).join("");
-
-      complianceHtml =
-        '<div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">' +
-        '  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">' +
-        '    <h2 class="cwSectionTitleCentered" style="border:none; padding:0; margin:0;">Compliance Snapshot</h2>' +
-        filterUIHtml +
-        '  </div>' +
-        '  <div class="cwSummaryGrid-fw" id="fwGridContainer">' + cardsHtml + '  </div>' +
-        '</div>';
+    var criticalListHtml = "";
+    if (criticalServices.length) {
+      criticalListHtml = 
+        '<ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 0.8rem; color: #881337;">' +
+        criticalServices.map(function (s) {
+          return '<li style="margin-bottom:4px;"><strong>' + s.name + '</strong> &ndash; ' + s.critical + ' critical</li>';
+        }).join("") +
+        '</ul>';
     }
+    
+    criticalSummaryHtml = `
+      <div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #fff1f2; border-color: #fecdd3;">
+        <div class="cwSummaryLabel" style="color: #be123c;">Critical Risks</div>
+        <div class="cwSummaryValue cwSummaryValue-critical" style="font-size: 32px; margin: 8px 0 4px;">${criticalFail}</div>
+        <div class="cwSummarySub" style="font-weight: 600; color: #be123c; margin-bottom: 8px;">Failing critical checks</div>
+        <div class="cwSummaryBody" style="font-size: 0.8rem; color: #881337;">Concentrated in your top services:</div>
+        ${criticalListHtml}
+      </div>`;
+  } else {
+    criticalSummaryHtml = `
+      <div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #f0fdf4; border-color: #bbf7d0;">
+        <div class="cwSummaryLabel" style="color: #15803d;">Critical Risks</div>
+        <div class="cwSummaryValue" style="font-size: 32px; margin: 8px 0 4px; color: #15803d;">0</div>
+        <div class="cwSummarySub" style="font-weight: 600; color: #166534;">No critical failing checks!</div>
+      </div>`;
+  }
 
-    // -------- 10C. Final Render HTML & Events --------
-    var failingServicesCount = Object.keys(byService).length;
+  var chartsHtml = `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:16px;">
+      ${criticalSummaryHtml}
+      <div class="cwSummaryCard" style="display:flex; flex-direction:column;">
+        <div class="cwSummaryLabel">Failing by Severity</div>
+        <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumSeverityBar"></canvas></div>
+      </div>
+      <div class="cwSummaryCard" style="display:flex; flex-direction:column;">
+        <div class="cwSummaryLabel">Top Failing Services</div>
+        <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumServiceBar"></canvas></div>
+      </div>
+      <div class="cwSummaryCard" style="display:flex; flex-direction:column;">
+        <div class="cwSummaryLabel">Top Failing Regions</div>
+        <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>
+      </div>
+    </div>`;
 
-    host.innerHTML =
-      '<div class="cwSummaryHeader">' +
-      '  <div class="cwSummaryHeader-main">' +
-      '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
-      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
-      '  </div>' +
-      '  <div class="cwSummaryHeader-pill">' + postureLabel + ' posture</div>' +
-      '</div>' +
-      '<div class="cwSummaryGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue" style="color:#16a34a;">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' total controls</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High / Critical Risks</div><div class="cwSummaryValue" style="color:#dc2626;">' + (highFail + criticalFail) + '</div><div class="cwSummarySub">Require immediate action</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Services Impacted</div><div class="cwSummaryValue" style="color:#d97706;">' + failingServicesCount + '</div><div class="cwSummarySub">AWS services with findings</div></div>' +
-      '</div>' +
-      chartsHtml + 
-      complianceHtml;
+  // -- COMPLIANCE FILTER LOGIC --
+  var defaultFrameworks = ["AWS-Foundational-Security-Best-Practices", "AWS-Foundational-Technical-Review", "AWS-Well-Architected-Framework-Security-Pillar", "PCI-3.2.1", "SOC2"];
+  var storedStr = localStorage.getItem("cwframeworkprefs");
+  var storedFwPref = storedStr ? JSON.parse(storedStr) : defaultFrameworks;
+
+  var complianceHtml = "";
+  if (fwList && fwList.length) {
+    var filterOptionsHtml = fwList.map(function(fw) {
+      var isChecked = storedFwPref.includes(fw.id) ? 'checked' : '';
+      return `<label class="cwFwCheckbox"><input type="checkbox" value="${fw.id}" ${isChecked}> <span>${fw.name}</span></label>`;
+    }).join('');
+
+    var filterUIHtml = `
+      <div class="cwFwFilterWrap">
+        <button class="cwFwFilterBtn" id="fwFilterBtn">Filter Frameworks ▾</button>
+        <div class="cwFwFilterDropdown" id="fwFilterDropdown">
+          <div class="cwFwFilterHeader">
+            <button id="fwFilterClear" class="cwBtn" style="padding:4px 8px; font-size:10px;">Clear All</button>
+            <button id="fwFilterAll" class="cwBtn" style="padding:4px 8px; font-size:10px;">Select All</button>
+          </div>
+          <div class="cwFwFilterList">
+            ${filterOptionsHtml}
+          </div>
+        </div>
+      </div>`;
+
+    var cardsHtml = fwList.map(function (fw) {
+      var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
+      var postureClass = passRateFw >= 90 ? "cwSummaryPill-good" : passRateFw >= 70 ? "cwSummaryPill-fair" : "cwSummaryPill-warn";
+      var postureLabelFw = passRateFw >= 90 ? "Strong" : passRateFw >= 70 ? "Fair" : "Needs attention";
+      var failLabel = (fw.highFail + fw.criticalFail === 0) 
+        ? "No high or critical failing controls" 
+        : `${fw.criticalFail} critical, ${fw.highFail} high failing controls`;
+      
+      var displayStyle = storedFwPref.includes(fw.id) ? "flex" : "none";
+
+      return `
+        <article class="cwSummaryCard-fw" data-fw-id="${fw.id}" style="display: ${displayStyle}; flex-direction: column; height: 100%; justify-content: space-between;">
+          <header class="cwSummaryCardHead">
+            <h3 class="cwSummaryCardTitle" title="${fw.name}">${fw.name}</h3>
+            <span class="cwSummaryPill ${postureClass}">${postureLabelFw}</span>
+          </header>
+
+          <div style="flex-grow: 1;">
+            <div class="cwSummaryCardBarWrap">
+              <span class="cwSummaryCardBarLabel">${passRateFw.toFixed(0)}% passed</span>
+              <div class="cwSummaryCardBarTrack">
+                <div class="cwSummaryCardBarFill cwSummaryCardBarFill-${passRateFw >= 90 ? 'good' : passRateFw >= 70 ? 'fair' : 'bad'}" style="width: ${passRateFw.toFixed(0)}%;"></div>
+              </div>
+            </div>
+
+            <div class="cwSummaryCardMetrics">
+              <div class="cwSummaryMetric">
+                <span class="cwSummaryMetricLabel">Controls</span>
+                <span class="cwSummaryMetricValue">${fw.pass} / ${fw.total}</span>
+              </div>
+              <div class="cwSummaryMetric">
+                <span class="cwSummaryMetricLabel">High / Critical</span>
+                <span class="cwSummaryMetricValue">
+                  <span style="color:#ef4444;">${fw.highFail}</span> / 
+                  <span style="color:#f97316;">${fw.criticalFail}</span>
+                </span>
+              </div>
+            </div>
+            <p class="cwSummaryCardFoot">${failLabel}</p>
+          </div>
+
+          <div style="margin-top: auto; padding-top: 12px;">
+            <button type="button" class="cwSummaryCardLink" data-fw-id="${fw.id}">View failing checks</button>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    complianceHtml = `
+      <div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">
+          <h2 class="cwSectionTitleCentered" style="border:none; padding:0; margin:0;">Compliance Snapshot</h2>
+          ${filterUIHtml}
+        </div>
+        <div class="cwSummaryGrid-fw" id="fwGridContainer">
+          ${cardsHtml}
+        </div>
+      </div>`;
+  }
+   // -------- 10C. Final Render & HTML Events --------
+  var failingServicesCount = Object.keys(byService).length;
+  host.innerHTML = `
+    <div class="cwSummaryHeader">
+      <div class="cwSummaryHeader-main">
+        <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>
+        <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>
+      </div>
+      <div class="cwSummaryHeader-pill postureLabel">${postureLabel}</div>
+    </div>
+    
+    ${chartsHtml}
+    ${complianceHtml}
+  `;
 
     // Clean up old event listeners to prevent duplicate triggers
     if (host._cwFilterBound) {

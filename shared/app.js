@@ -5,6 +5,77 @@
  * - Dynamic rendering is delegated to renderSummary/renderOverview/renderCompliance
  */
 
+// Global helper so dynamic buttons can navigate to the Compliance tab
+window.goToComplianceFramework = function(frameworkName) {
+  console.group("🔍 TRACE: goToComplianceFramework");
+  console.log("1. Function triggered for framework:", frameworkName);
+
+  const tabSummary = document.getElementById("tabSummary");
+  const tabOverview = document.getElementById("tabOverview");
+  const tabCompliance = document.getElementById("tabCompliance");
+  
+  const viewSummary = document.getElementById("viewSummary");
+  const viewOverview = document.getElementById("viewOverview");
+  const viewCompliance = document.getElementById("viewCompliance");
+
+  console.log("2. DOM Elements found:", { 
+    viewSummary: !!viewSummary, 
+    viewOverview: !!viewOverview, 
+    viewCompliance: !!viewCompliance 
+  });
+
+  // 3. FORCE CLEAR legacy inline styles from render.js
+  if (viewSummary) viewSummary.style.display = '';
+  if (viewOverview) viewOverview.style.display = '';
+  if (viewCompliance) viewCompliance.style.display = '';
+  console.log("3. Cleared legacy inline styles (display: none)");
+
+  // 4. Update Tab visual states
+  if (tabSummary) tabSummary.classList.remove("cwTabActive");
+  if (tabOverview) tabOverview.classList.remove("cwTabActive");
+  if (tabCompliance) tabCompliance.classList.add("cwTabActive");
+
+  // 5. Update View visibility classes
+  if (viewSummary) viewSummary.classList.add("cwViewHidden");
+  if (viewOverview) viewOverview.classList.add("cwViewHidden");
+  
+  if (viewCompliance) {
+    viewCompliance.classList.remove("cwViewHidden");
+    console.log("4. Applied correct classes. viewCompliance classes:", viewCompliance.className);
+    
+    // Ensure renderCompliance triggers if it hasn't already
+    if (typeof renderCompliance === "function") {
+      const rows = window.__cwAllRows || window.allRows || [];
+      console.log("5. Forcing renderCompliance with rows:", rows.length);
+      if (rows.length) renderCompliance(rows);
+    }
+  }
+
+  // 6. Manipulate the filters after DOM updates
+  setTimeout(() => {
+    const ceFramework = document.getElementById("ceFramework");
+    const ceStatus = document.getElementById("ceStatus"); 
+    
+    console.log("6. Inside timeout, looking for filters:", { 
+      ceFramework: !!ceFramework, 
+      ceStatus: !!ceStatus 
+    });
+
+    if (ceFramework) {
+      ceFramework.value = frameworkName;
+      if (ceStatus) ceStatus.value = "FAIL"; 
+      
+      console.log("7. Dispatching change event to update table");
+      ceFramework.dispatchEvent(new Event("change", { bubbles: true }));
+      
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      console.error("❌ ceFramework dropdown not found in the DOM!");
+    }
+    console.groupEnd();
+  }, 100);
+};
+
 (function () {
   // ---------------------------------------------------------------------------
   // Small DOM helper
@@ -254,4 +325,41 @@
   } else {
     boot();
   }
+
+
+  // ---------------------------------------------------------------------------
+  // Global Click Listener for "View failing checks" buttons
+  // ---------------------------------------------------------------------------
+  document.body.addEventListener("click", function(e) {
+    if (e.target && e.target.classList.contains("cwSummaryCardLink")) {
+      e.preventDefault();
+      
+      const fwId = e.target.getAttribute("data-fw-id");
+      if (!fwId) return;
+
+      // 1. Switch to Compliance tab naturally via app.js
+      const tabCompliance = document.getElementById("tabCompliance");
+      if (tabCompliance) {
+        tabCompliance.click();
+      }
+
+      // 2. Set filters after DOM update
+      setTimeout(() => {
+        const ceFramework = document.getElementById("ceFramework");
+        const ceStatus = document.getElementById("ceStatus"); 
+
+        if (ceFramework) {
+          ceFramework.value = fwId; 
+          
+          // Leave status as ALL so the KPIs calculate the real pass rate!
+          if (ceStatus) {
+             ceStatus.value = "ALL"; 
+          }
+
+          ceFramework.dispatchEvent(new Event("change", { bubbles: true }));
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
+    }
+  });
 })();

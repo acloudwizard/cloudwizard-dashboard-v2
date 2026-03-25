@@ -468,10 +468,11 @@ body {
    --------------------------------------------------- */
 .cwSummaryGrid-fw {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  /* Changed from auto-fit to auto-fill */
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 12px;
   margin-top: 8px;
-  min-height: 300px; /* Prevents container from collapsing when all cards are hidden */
+  min-height: 300px; 
 }
 
 @media (min-width: 1280px) {
