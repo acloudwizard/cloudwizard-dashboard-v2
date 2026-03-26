@@ -1766,56 +1766,78 @@ function renderFailedCriticalRisksBlock(allRows) {
     return String(r.CHECK_ID || "UNKNOWN").trim();
   });
 
-  const rowsHtml = Array.from(byCheck.entries()).map(function ([checkId, rows]) {
-    const first = rows[0] || {};
-    const title = String(first.CHECK_TITLE || checkId).trim();
-    const sev   = String(first.SEVERITY || "").trim();
-    const svc   = String(first.SERVICE_NAME || "").trim();
-    const res   = String(first.RESOURCE_UID || "").trim();
-    const count = rows.length;
+const rowsHtml = Array.from(byCheck.entries()).map(function ([checkId, rows]) {
+  const first = rows[0] || {};
+  const title = String(first.CHECK_TITLE || checkId).trim();
+  const sev   = String(first.SEVERITY || "").trim();
+  const svc   = String(first.SERVICE_NAME || "").trim();
+  const count = rows.length;
 
+  const tableRows = rows.slice(0, 50).map(function (r) {
+    const res = String(r.RESOURCE_UID || "").trim();
     return (
-      '<div style="border-top:1px solid #e5e7eb; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">' +
-        '<div style="flex:1; min-width:0;">' +
-          '<div style="font-weight:700; font-size:13px; color:#0f172a; margin-bottom:4px;">' +
+      '<tr>' +
+        '<td><span class="cwStatusFail">FAIL</span></td>' +
+        '<td>' + escapeHtml(String(r.SEVERITY || "")) + '</td>' +
+        '<td>' + escapeHtml(String(r.SERVICE_NAME || "")) + '</td>' +
+        '<td class="cwMono">' + escapeHtml(res) + '</td>' +
+      '</tr>'
+    );
+  }).join("");
+
+  return (
+    '<details class="cwCheck">' +  // closed by default
+      '<summary class="cwCheckSummary" style="display:flex; align-items:center; gap:12px; padding:8px 0; cursor:pointer;">' +
+        '<div style="flex:1; min-width:0; padding-right:8px;">' +
+          '<div style="font-weight:700; font-size:13px; color:#0f172a; margin-bottom:2px;">' +
             escapeHtml(checkId) +
           '</div>' +
           '<div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(title) + '">' +
             escapeHtml(title) +
           '</div>' +
         '</div>' +
-        '<div style="margin-left:16px; display:flex; align-items:center; gap:12px; font-size:11px; color:#64748b;">' +
-          '<div style="text-align:left;">' +
-            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Status</div>' +
-            '<span class="cwPill cwFail">FAIL</span>' +
-          '</div>' +
-          '<div style="text-align:left;">' +
+        '<div style="display:flex; align-items:center; gap:16px; font-size:11px; color:#64748b; flex-shrink:0;">' +
+          '<div style="width:70px;">' +
             '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Sev</div>' +
             escapeHtml(sev) +
           '</div>' +
-          '<div style="text-align:left; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+          '<div style="width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
             '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Service</div>' +
             escapeHtml(svc) +
           '</div>' +
-          '<div style="text-align:left; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
-            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Resource</div>' +
-            '<span class="cwMono">' + escapeHtml(res) + '</span>' +
-          '</div>' +
         '</div>' +
-        '<div style="margin-left:auto; padding-left:12px;">' +
+        '<div style="margin-left:auto; padding-left:12px; flex-shrink:0;">' +
           '<span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:999px; background:#ef4444; color:#fff; font-size:11px; font-weight:800;">' +
             'FAIL ' + count +
           '</span>' +
         '</div>' +
-      '</div>'
-    );
-  }).join("");
+      '</summary>' +
+      '<div class="cwTableWrap" style="margin:8px 0 4px;">' +
+        '<table class="cwTable">' +
+          '<thead>' +
+            '<tr>' +
+              '<th>STATUS</th>' +
+              '<th>SEV</th>' +
+              '<th>SERVICE</th>' +
+              '<th>RESOURCE</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' +
+            tableRows +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</details>'
+  );
+}).join("");
 
-  const blockHtml =
-    '<div class="card" style="padding:10px 14px 6px; margin-top:18px; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(15,23,42,0.06);">' +
+const blockHtml =
+  '<div style="display:flex; justify-content:flex-start; margin-top:18px;">' +
+    '<div class="card" style="flex:0 0 75%; max-width:75%; padding:10px 14px 6px; border-radius:10px; border:2px solid #ef4444; box-shadow:0 4px 10px rgba(15,23,42,0.06);">' +
       '<div style="font-weight:900; font-size:15px; color:#0f172a; margin-bottom:8px;">Failed critical risks</div>' +
       rowsHtml +
-    '</div>';
+    '</div>' +
+  '</div>';
 
   host.insertAdjacentHTML("beforeend", blockHtml);
 }
