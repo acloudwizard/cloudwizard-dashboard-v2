@@ -1554,23 +1554,17 @@
       // -------- 10C. Final Render HTML & Events --------
     var failingServicesCount = Object.keys(byService).length;
 
-    host.innerHTML = 
-      '<div class="cwSummaryHeader">' +
-      '  <div class="cwSummaryHeader-main">' +
-      '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
-      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
-      '  </div>' +
-      '  <div class="cwSummaryHeader-pill ' + postureLabel + '">' + postureLabel + ' posture</div>' +
-      '</div>' +
-      '<div class="cwSummaryGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue" style="color:#16a34a;">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' total controls</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High / Critical Risks</div><div class="cwSummaryValue" style="color:#dc2626;">' + (highFail + criticalFail) + '</div><div class="cwSummarySub">Require immediate action</div></div>' +
-      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Services Impacted</div><div class="cwSummaryValue" style="color:#d97706;">' + failingServicesCount + '</div><div class="cwSummarySub">AWS services with findings</div></div>' +
-      '</div>' +
-      chartsHtml + 
-      criticalTreeHtml + 
-      complianceHtml;
+host.innerHTML =
+  '<div class="cwSummaryHeader">' +
+    '<div class="cwSummaryHeader-main">' +
+      '<div class="cwSummaryHeader-title">Security &amp; Compliance Snapshot</div>' +
+      '<div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
+    '</div>' +
+  '</div>' +
+  chartsHtml +
+  complianceHtml;
+
+  renderFailedCriticalRisksBlock(allRows);
 
     // Clean up old event listeners to prevent duplicate triggers
     if (host._cwFilterBound) {
@@ -1741,6 +1735,87 @@
       }
     }
   }
+
+  // ------------------------------------------------------------------------
+// 10E. Failed critical risks block
+// ------------------------------------------------------------------------
+function renderFailedCriticalRisksBlock(allRows) {
+  const host = document.getElementById("viewSummaryInner") || document.getElementById("viewSummary");
+  if (!host) return;
+
+  const tState = getTriageState();
+  const criticalRows = allRows.filter(function (r) {
+    const status = String(r.STATUS || "").toUpperCase();
+    if (status !== "FAIL") return false;
+
+    const sev = norm(r.SEVERITY);
+    if (sev !== "critical") return false;
+
+    const ts = tState[getFindingId(r)];
+    if (ts && (ts.status === "ignored" || ts.status === "fixed")) return false;
+
+    return true;
+  });
+
+  if (!criticalRows.length) return;
+
+  const byCheck = groupMap(criticalRows, function (r) {
+    return String(r.CHECK_ID || "UNKNOWN").trim();
+  });
+
+  const rowsHtml = Array.from(byCheck.entries()).map(function ([checkId, rows]) {
+    const first = rows[0] || {};
+    const title = String(first.CHECK_TITLE || checkId).trim();
+    const sev   = String(first.SEVERITY || "").trim();
+    const svc   = String(first.SERVICE_NAME || "").trim();
+    const res   = String(first.RESOURCE_UID || "").trim();
+    const count = rows.length;
+
+    return (
+      '<div style="border-top:1px solid #e5e7eb; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-weight:700; font-size:13px; color:#0f172a; margin-bottom:4px;">' +
+            escapeHtml(checkId) +
+          '</div>' +
+          '<div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(title) + '">' +
+            escapeHtml(title) +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-left:16px; display:flex; align-items:center; gap:12px; font-size:11px; color:#64748b;">' +
+          '<div style="text-align:left;">' +
+            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Status</div>' +
+            '<span class="cwPill cwFail">FAIL</span>' +
+          '</div>' +
+          '<div style="text-align:left;">' +
+            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Sev</div>' +
+            escapeHtml(sev) +
+          '</div>' +
+          '<div style="text-align:left; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Service</div>' +
+            escapeHtml(svc) +
+          '</div>' +
+          '<div style="text-align:left; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Resource</div>' +
+            '<span class="cwMono">' + escapeHtml(res) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-left:auto; padding-left:12px;">' +
+          '<span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:999px; background:#ef4444; color:#fff; font-size:11px; font-weight:800;">' +
+            'FAIL ' + count +
+          '</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
+
+  const blockHtml =
+    '<div class="card" style="padding:10px 14px 6px; margin-top:18px; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 4px 10px rgba(15,23,42,0.06);">' +
+      '<div style="font-weight:900; font-size:15px; color:#0f172a; margin-bottom:8px;">Failed critical risks</div>' +
+      rowsHtml +
+    '</div>';
+
+  host.insertAdjacentHTML("beforeend", blockHtml);
+}
   // ------------------------------------------------------------------------
   // 11. Auto-start & Exports
   // ------------------------------------------------------------------------
