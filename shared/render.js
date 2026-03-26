@@ -1244,6 +1244,59 @@
    // ------------------------------------------------------------------------
   // 10. Summary View (With Embedded Charts)
   // ------------------------------------------------------------------------
+ function buildSnapshotCard(allRows) {
+  const c = countStatuses(allRows);
+  const sev = countSeverities(allRows);
+
+  const total = c.FAIL + c.PASS + c.MANUAL;
+  const openFails = c.FAIL;
+  const crit = sev.critical || 0;
+  const high = sev.high || 0;
+
+  // For now totals = overall critical/high findings; plug real denominators here if you have them
+  const sevTotalCritical = crit;
+  const sevTotalHigh = high;
+
+  const passPct = total > 0 ? Math.round((c.PASS / total) * 100) : 0;
+  const passColor =
+    passPct >= 80 ? "#22c55e" :
+    passPct >= 60 ? "#fbbf24" :
+    "#f97316";
+
+  return ''
+    + '<div class="cwSummaryCard" style="padding:14px 12px; border-radius:12px;'
+    + ' border:1px solid #1d4ed8;'
+    + ' background:linear-gradient(135deg,#0E2262,#1d4ed8);'
+    + ' color:#e5e7eb; box-shadow:0 10px 25px rgba(15,23,42,0.35);">'
+    + '  <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em;'
+    + ' color:#bfdbfe; font-weight:800; margin-bottom:4px;">Snapshot</div>'
+    + '  <div style="font-size:16px; font-weight:900; margin-bottom:10px; color:#f9fafb;">Environment health</div>'
+    + '  <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:10px;">'
+    + '    <div>'
+    + '      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#e5e7eb; margin-bottom:2px;">Pass rate</div>'
+    + '      <div style="font-size:22px; font-weight:900; color:' + passColor + ';">' + passPct + '%</div>'
+    + '    </div>'
+    + '    <div>'
+    + '      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#e5e7eb; margin-bottom:2px;">Open fails</div>'
+    + '      <div style="font-size:18px; font-weight:800;">' + openFails + '</div>'
+    + '    </div>'
+    + '  </div>'
+    + '  <div style="display:flex; flex-direction:column; gap:4px; font-size:11px;">'
+    + '    <div style="display:flex; justify-content:space-between; align-items:center;">'
+    + '      <span style="color:#e5e7eb;">Critical</span>'
+    + '      <span><span style="color:#fecaca; font-weight:700;">' + crit + '</span><span style="opacity:0.8;"> / ' + sevTotalCritical + '</span></span>'
+    + '    </div>'
+        + '    <div style="display:flex; justify-content:space-between; align-items:center;">'
+    + '      <span style="color:#e5e7eb;">High</span>'
+    + '      <span><span style="color:#fed7aa; font-weight:700;">' + high + '</span><span style="opacity:0.8;"> / ' + sevTotalHigh + '</span></span>'
+    + '    </div>'
+    + '  </div>'
+    + '  <div style="margin-top:10px; padding-top:8px; border-top:1px dashed rgba(248,250,252,0.35); font-size:11px; line-height:1.4; color:#e5e7eb;">'
+    + '    We recommend addressing the critical and high-severity findings within the next 7 days to minimize security exposure. CloudWizard can help you remediate these issues quickly with our managed security service.'
+    + '  </div>'
+    + '</div>';
+}
+  
   function renderSummary(allRows) {
     const host = $("viewSummaryInner");
     if (!host) return;
@@ -1347,8 +1400,8 @@
 var chartsHtml =
   // TOP ROW: 4 equal 25% boxes
   '<div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-top:16px;">' +
-    // empty space (25%)
-    '  <div></div>' +
+    // snapshot card (25%)
+'  <div>' + buildSnapshotCard(allRows) + '</div>' +
 
     // Failing by Severity
     '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
