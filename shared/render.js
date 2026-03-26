@@ -1561,10 +1561,13 @@ host.innerHTML =
       '<div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
     '</div>' +
   '</div>' +
-  chartsHtml +
-  complianceHtml;
+  chartsHtml;
 
-  renderFailedCriticalRisksBlock(allRows);
+// failed critical risks directly under charts
+renderFailedCriticalRisksBlock(allRows);
+
+// compliance grid now comes after that block
+host.insertAdjacentHTML("beforeend", complianceHtml);
 
     // Clean up old event listeners to prevent duplicate triggers
     if (host._cwFilterBound) {
