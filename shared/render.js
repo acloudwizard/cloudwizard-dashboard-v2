@@ -1361,6 +1361,111 @@
       </div>
     </div>`;
 
+       // -- TOP FAILING SERVICES LOGIC --
+    var topServicesHtml = "";
+    var sortedAllServices = Object.keys(byService).map(function(svc) {
+      return {
+        name: svc,
+        critical: byService[svc].critical,
+        high: byService[svc].high,
+        totalFail: byService[svc].totalFail
+      };
+    }).sort(function(a, b) {
+      return b.totalFail - a.totalFail; 
+    }).slice(0, 8); // Showing the top 8 failing services
+
+    if (sortedAllServices.length > 0) {
+      var serviceCardsHtml = sortedAllServices.map(function(s) {
+        return '<article class="cwSummaryCard-fw" style="display:flex; flex-direction:column; justify-content:space-between;">' +
+               '  <header class="cwSummaryCardHead">' +
+               '    <h3 class="cwSummaryCardTitle" title="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</h3>' +
+               '  </header>' +
+               '  <div style="flex-grow:1; margin-top:8px;">' +
+               '    <div style="font-size:24px; font-weight:900; color:var(--cw-text-main);">' + s.totalFail + ' <span style="font-size:12px; font-weight:600; color:var(--cw-text-muted);">open findings</span></div>' +
+               '  </div>' +
+               '  <div class="cwSummaryCardMetrics" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--cw-border);">' +
+               '    <div class="cwSummaryMetric">' +
+               '      <span class="cwSummaryMetricLabel">High / Critical</span>' +
+               '      <span class="cwSummaryMetricValue">' +
+               '        <span style="color:#f97316;">' + s.high + '</span> / ' +
+               '        <span style="color:#ef4444;">' + s.critical + '</span>' +
+               '      </span>' +
+               '    </div>' +
+               '  </div>' +
+               '</article>';
+      }).join("");
+
+      topServicesHtml = 
+        '<div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">' +
+        '  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">' +
+        '    <div>' +
+        '      <h2 class="cwSectionTitle" style="border:none; padding:0; margin:0; font-size: 1.25rem;">Top Failing Services</h2>' +
+        '      <div style="color:var(--cw-text-muted); margin-top:4px; font-size:14px; font-weight:500;">View your most vulnerable services.</div>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="cwSummaryGrid-fw">' + serviceCardsHtml + '</div>' +
+        '</div>';
+    } 
+
+        // -- FAILED CRITICAL RISKS ACCORDION --
+    var criticalFailedRows = allRows.filter(function(r) { return String(r.STATUS).toUpperCase() === 'FAIL' && norm(r.SEVERITY) === 'critical'; });
+    var criticalTreeHtml = "";
+
+    if (criticalFailedRows.length > 0) {
+      var criticalChecks = groupMap(criticalFailedRows, function(r) { return r.CHECKID || r.CHECK_ID || "Unknown"; });
+      var sortedCriticalChecks = Array.from(criticalChecks.entries()).sort(function(a, b) { return b[1].length - a[1].length; });
+      var tState = getTriageState() || {};
+
+      criticalTreeHtml = 
+        '<div style="margin-top:32px;">' +
+        '  <h2 style="margin:0 0 16px 0; font-size: 26px; font-weight: 500; color: var(--cw-text-main);">Failed critical risks</h2>' +
+        '  <div class="cwTree" style="background: var(--cw-bg-card); border-radius: 8px; padding: 4px; border: 1px solid var(--cw-border);">';
+
+      sortedCriticalChecks.forEach(function(chkEntry) {
+        var chkId = chkEntry[0];
+        var chkRows = chkEntry[1];
+        var chkTitle = chkRows[0] && chkRows[0].CHECKTITLE ? chkRows[0].CHECKTITLE.trim() : "";
+        var checkFailCount = chkRows.length;
+        
+        criticalTreeHtml += 
+          '<details class="cwCheck">' +
+          '  <summary class="cwCheckSummary" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--cw-border); cursor:pointer;">' +
+          '    <div class="cwCheckLeft" style="min-width:0; flex:1; padding-right:8px;">' +
+          '      <div class="cwCheckId" style="font-weight:700; color:var(--cw-text-main); font-size:14px; margin-bottom:4px;">' + escapeHtml(chkId) + '</div>' +
+          '      <div class="cwCheckTitle" title="' + escapeHtml(chkTitle) + '" style="font-size:14px; color:var(--cw-text-main);">' + escapeHtml(chkTitle) + '</div>' +
+          '    </div>' +
+          '    <div class="cwPills" style="flex-shrink:0; display:flex;">' +
+          '      <span class="cwPill cwFail" style="border-radius:12px; padding:4px 10px; font-weight:800; font-size:12px; background:#ef4444; color:#fff;">FAIL ' + checkFailCount + '</span>' +
+          '    </div>' +
+          '  </summary>' +
+          '  <div class="cwTableWrap" style="margin: 10px;">' +
+          '    <table class="cwTable">' +
+          '      <thead><tr><th>STATUS</th><th>SEV</th><th>SERVICE</th><th>RESOURCE</th></tr></thead>' +
+          '      <tbody>' +
+                   chkRows.slice(0, 100).map(function(r) {
+                     var fId = [r.CHECKID, r.RESOURCEUID, r.ACCOUNTUID].join("|");
+                     var ts = tState[fId];
+                     var isSuppressed = ts && (ts.status === 'ignored' || ts.status === 'fixed');
+                     var rowOpacity = isSuppressed ? 'opacity:0.5;' : '';
+                     var triageBadge = (ts && ts.status) ? '<span style="font-size:9px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:800; text-transform:uppercase;">' + escapeHtml(ts.status) + '</span>' : "";
+                     var statusClass = (String(r.STATUS).toUpperCase() === 'FAIL') ? 'cwStatusFail' : 'cwStatusPass';
+
+                     return '<tr class="cwRow" style="' + rowOpacity + '">' +
+                            '  <td><span class="' + statusClass + '">' + escapeHtml(r.STATUS) + '</span>' + triageBadge + '</td>' +
+                            '  <td>' + escapeHtml(r.SEVERITY) + '</td>' +
+                            '  <td>' + escapeHtml(r.SERVICENAME || r.SERVICE || '') + '</td>' +
+                            '  <td class="cwMono">' + escapeHtml(r.RESOURCEUID || r.RESOURCE || '') + '</td>' +
+                            '</tr>';
+                   }).join("") +
+          '      </tbody>' +
+          '    </table>' +
+          '  </div>' +
+          '</details>';
+      });
+
+      criticalTreeHtml += '</div></div>';
+    }
+
   // -- COMPLIANCE FILTER LOGIC --
   var defaultFrameworks = ["AWS-Foundational-Security-Best-Practices", "AWS-Foundational-Technical-Review", "AWS-Well-Architected-Framework-Security-Pillar", "PCI-3.2.1", "SOC2"];
   var storedStr = localStorage.getItem("cwframeworkprefs");
@@ -1446,20 +1551,26 @@
         </div>
       </div>`;
   }
-   // -------- 10C. Final Render & HTML Events --------
-  var failingServicesCount = Object.keys(byService).length;
-  host.innerHTML = `
-    <div class="cwSummaryHeader">
-      <div class="cwSummaryHeader-main">
-        <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>
-        <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>
-      </div>
-      <div class="cwSummaryHeader-pill postureLabel">${postureLabel}</div>
-    </div>
-    
-    ${chartsHtml}
-    ${complianceHtml}
-  `;
+      // -------- 10C. Final Render HTML & Events --------
+    var failingServicesCount = Object.keys(byService).length;
+
+    host.innerHTML = 
+      '<div class="cwSummaryHeader">' +
+      '  <div class="cwSummaryHeader-main">' +
+      '    <div class="cwSummaryHeader-title">Security & Compliance Snapshot</div>' +
+      '    <div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
+      '  </div>' +
+      '  <div class="cwSummaryHeader-pill ' + postureLabel + '">' + postureLabel + ' posture</div>' +
+      '</div>' +
+      '<div class="cwSummaryGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Checks Passed</div><div class="cwSummaryValue" style="color:#16a34a;">' + passRate.toFixed(0) + '%</div><div class="cwSummarySub">of ' + totalChecks + ' total controls</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Open Findings</div><div class="cwSummaryValue">' + failCount + '</div><div class="cwSummarySub">Total failing controls</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">High / Critical Risks</div><div class="cwSummaryValue" style="color:#dc2626;">' + (highFail + criticalFail) + '</div><div class="cwSummarySub">Require immediate action</div></div>' +
+      '  <div class="cwSummaryCard"><div class="cwSummaryLabel">Services Impacted</div><div class="cwSummaryValue" style="color:#d97706;">' + failingServicesCount + '</div><div class="cwSummarySub">AWS services with findings</div></div>' +
+      '</div>' +
+      chartsHtml + 
+      criticalTreeHtml + 
+      complianceHtml;
 
     // Clean up old event listeners to prevent duplicate triggers
     if (host._cwFilterBound) {
@@ -1468,38 +1579,56 @@
     }
 
     function applyFwFilter() {
-      const checks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
-      const cards = host.querySelectorAll(".cwSummaryCard-fw");
+      var checks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
+      var cards = host.querySelectorAll(".cwSummaryCard-fw");
       
-      const selected = Array.from(checks).filter(c => c.checked).map(c => c.value);
-      localStorage.setItem("cw_framework_prefs", JSON.stringify(selected));
+      var selected = [];
+      for (var i = 0; i < checks.length; i++) {
+        if (checks[i].checked) {
+          selected.push(checks[i].value);
+        }
+      }
+      
+      localStorage.setItem("cwframeworkprefs", JSON.stringify(selected));
 
-      cards.forEach(card => {
-        const id = card.getAttribute("data-fw-id");
-        card.style.display = selected.includes(id) ? "flex" : "none";
-      });
+      for (var j = 0; j < cards.length; j++) {
+        var id = cards[j].getAttribute("data-fw-id");
+        cards[j].style.display = (selected.indexOf(id) > -1) ? "flex" : "none";
+      }
     }
 
     // Event Delegation: Attach to the main container, not the volatile inner elements
     host._cwFilterBound = function(e) {
-      const btn = e.target.closest('#fwFilterBtn');
-      const drop = document.getElementById('fwFilterDropdown');
+      var btn = e.target.closest('#fwFilterBtn');
+      var drop = document.getElementById('fwFilterDropdown');
       
       if (btn && drop) {
         e.stopPropagation();
-        drop.style.display = drop.style.display === "block" ? "none" : "block";
+        drop.style.display = (drop.style.display === "block") ? "none" : "block";
         return;
       }
 
       if (e.target.closest('#fwFilterClear')) {
-        host.querySelectorAll(".cwFwCheckbox input[type='checkbox']").forEach(c => c.checked = false);
+        var clrChecks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
+        for (var k = 0; k < clrChecks.length; k++) { clrChecks[k].checked = false; }
         applyFwFilter();
         return;
       }
 
       if (e.target.closest('#fwFilterAll')) {
-        host.querySelectorAll(".cwFwCheckbox input[type='checkbox']").forEach(c => c.checked = true);
+        var allChecks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
+        for (var m = 0; m < allChecks.length; m++) { allChecks[m].checked = true; }
         applyFwFilter();
+        return;
+      }
+
+      // Framework Card "View failing checks" redirect routing
+      var linkBtn = e.target.closest('.cwSummaryCardLink');
+      if (linkBtn) {
+        var fwId = linkBtn.getAttribute('data-fw-id');
+        if (typeof window.goToComplianceFramework === 'function') {
+          window.goToComplianceFramework(fwId);
+        }
         return;
       }
 
@@ -1509,7 +1638,7 @@
     };
 
     host._cwChangeBound = function(e) {
-      if (e.target.matches(".cwFwCheckbox input[type='checkbox']")) {
+      if (e.target && e.target.matches && e.target.matches(".cwFwCheckbox input[type='checkbox']")) {
         applyFwFilter();
       }
     };
