@@ -1397,39 +1397,30 @@
       </div>`;
   }
 
-var chartsHtml =
-  // TOP ROW: 4 equal 25% boxes
-  '<div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-top:16px;">' +
-    // snapshot card (25%)
-'  <div>' + buildSnapshotCard(allRows) + '</div>' +
-
-    // Failing by Severity
-    '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
-    '    <div class="cwSummaryLabel">Failing by Severity</div>' +
-    '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumSeverityBar"></canvas></div>' +
-    '  </div>' +
-
-    // Top Failing Services
-    '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
-    '    <div class="cwSummaryLabel">Top Failing Services</div>' +
-    '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumServiceBar"></canvas></div>' +
-    '  </div>' +
-
-    // Top Failing Regions
-    '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
-    '    <div class="cwSummaryLabel">Top Failing Regions</div>' +
-    '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>' +
-    '  </div>' +
-  '</div>' +
-
-  // SECOND ROW: Critical Risks KPI (25%) + Failed critical risks (75%)
-  '<div style="display:grid; grid-template-columns:25% 75%; gap:12px; margin-top:12px; align-items:flex-start;">' +
-    // Critical Risks KPI card
-    '  <div>' + criticalSummaryHtml + '</div>' +
-
-    // Right side container for Failed critical risks accordion
-    '  <div id="cwFailedCriticalWrapper"></div>' +
-  '</div>';
+    var chartsHtml =
+      // TOP ROW: 4 equal 25% boxes
+      '<div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-top:16px;">' +
+      // snapshot card (25%)
+      '  <div>' + buildSnapshotCard(allRows) + '</div>' +
+      // Failing by Severity
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
+      '    <div class="cwSummaryLabel">Failing by Severity</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumSeverityBar"></canvas></div>' +
+      '  </div>' +
+      // Top Failing Services
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
+      '    <div class="cwSummaryLabel">Top Failing Services</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumServiceBar"></canvas></div>' +
+      '  </div>' +
+      // Top Failing Regions
+      '  <div class="cwSummaryCard" style="display:flex; flex-direction:column; box-sizing:border-box;">' +
+      '    <div class="cwSummaryLabel">Top Failing Regions</div>' +
+      '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>' +
+      '  </div>' +
+      '</div>' +
+      // SECOND ROW: container only; content filled by renderFailedCriticalRisksBlock
+      '<div id="cwFailedCriticalWrapper" ' +
+      '     style="margin-top:12px;"></div>';
 
   // ------------------------------------------------------------------------
 // 10F. Top failing services cards
@@ -1482,68 +1473,76 @@ if (sortedAllServices.length > 0) {
   + '</div>';
 }
         // -- FAILED CRITICAL RISKS ACCORDION --
-    var criticalFailedRows = allRows.filter(function(r) { return String(r.STATUS).toUpperCase() === 'FAIL' && norm(r.SEVERITY) === 'critical'; });
-    var criticalTreeHtml = "";
+        var criticalFailedRows = allRows.filter(function(r) {
+          return String(r.STATUS).toUpperCase() === 'FAIL' && norm(r.SEVERITY) === 'critical';
+        });
+        var criticalTreeHtml = "";
 
-    if (criticalFailedRows.length > 0) {
-      var criticalChecks = groupMap(criticalFailedRows, function(r) { return r.CHECKID || r.CHECK_ID || "Unknown"; });
-      var sortedCriticalChecks = Array.from(criticalChecks.entries()).sort(function(a, b) { return b[1].length - a[1].length; });
-      var tState = getTriageState() || {};
+        if (criticalFailedRows.length > 0) {
+          var criticalChecks = groupMap(criticalFailedRows, function(r) {
+            return r.CHECKID || r.CHECK_ID || "Unknown";
+          });
+          var sortedCriticalChecks = Array.from(criticalChecks.entries()).sort(function(a, b) {
+            return b[1].length - a[1].length;
+          });
+          var tState = getTriageState() || {};
 
-      criticalTreeHtml = 
-        '<div style="margin-top:32px;">' +
-        '  <h2 style="margin:0 0 16px 0; font-size: 26px; font-weight: 500; color: var(--cw-text-main);">Failed critical risks</h2>' +
-        '  <div class="cwTree" style="background: var(--cw-bg-card); border-radius: 8px; padding: 4px; border: 1px solid var(--cw-border);">';
+          criticalTreeHtml =
+            '<div style="margin-top:32px;">' +
+            '  <h2 style="margin:0 0 16px 0; font-size: 26px; font-weight: 500; color: var(--cw-text-main);">Failed critical risks</h2>' +
+            '  <div class="cwTree" style="background: var(--cw-bg-card); border-radius: 8px; padding: 4px; border: 1px solid var(--cw-border);">';
 
-      sortedCriticalChecks.forEach(function(chkEntry) {
-        var chkId = chkEntry[0];
-        var chkRows = chkEntry[1];
-        var chkTitle = chkRows[0] && chkRows[0].CHECKTITLE ? chkRows[0].CHECKTITLE.trim() : "";
-        var checkFailCount = chkRows.length;
-        
-        criticalTreeHtml += 
-          '<details class="cwCheck">' +
-          '  <summary class="cwCheckSummary" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--cw-border); cursor:pointer;">' +
-          '    <div class="cwCheckLeft" style="min-width:0; flex:1; padding-right:8px;">' +
-          '      <div class="cwCheckId" style="font-weight:700; color:var(--cw-text-main); font-size:14px; margin-bottom:4px;">' + escapeHtml(chkId) + '</div>' +
-          '      <div class="cwCheckTitle" title="' + escapeHtml(chkTitle) + '" style="font-size:14px; color:var(--cw-text-main);">' + escapeHtml(chkTitle) + '</div>' +
-          '    </div>' +
-          '    <div class="cwPills" style="flex-shrink:0; display:flex;">' +
-          '      <span class="cwPill cwFail" style="border-radius:12px; padding:4px 10px; font-weight:800; font-size:12px; background:#ef4444; color:#fff;">FAIL ' + checkFailCount + '</span>' +
-          '    </div>' +
-          '  </summary>' +
-          '  <div class="cwTableWrap" style="margin: 10px;">' +
-          '    <table class="cwTable">' +
-          '      <thead><tr><th>STATUS</th><th>SEV</th><th>SERVICE</th><th>RESOURCE</th></tr></thead>' +
-          '      <tbody>' +
-                   chkRows.slice(0, 100).map(function(r) {
-                     var fId = [r.CHECKID, r.RESOURCEUID, r.ACCOUNTUID].join("|");
-                     var ts = tState[fId];
-                     var isSuppressed = ts && (ts.status === 'ignored' || ts.status === 'fixed');
-                     var rowOpacity = isSuppressed ? 'opacity:0.5;' : '';
-                     var triageBadge = (ts && ts.status) ? '<span style="font-size:9px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:800; text-transform:uppercase;">' + escapeHtml(ts.status) + '</span>' : "";
-                     var statusClass = (String(r.STATUS).toUpperCase() === 'FAIL') ? 'cwStatusFail' : 'cwStatusPass';
+          sortedCriticalChecks.forEach(function(chkEntry) {
+            var chkId = chkEntry[0];
+            var chkRows = chkEntry[1];
+            var chkTitle = chkRows[0] && chkRows[0].CHECKTITLE ? chkRows[0].CHECKTITLE.trim() : "";
+            var checkFailCount = chkRows.length;
 
-                     return '<tr class="cwRow" style="' + rowOpacity + '">' +
-                            '  <td><span class="' + statusClass + '">' + escapeHtml(r.STATUS) + '</span>' + triageBadge + '</td>' +
-                            '  <td>' + escapeHtml(r.SEVERITY) + '</td>' +
-                            '  <td>' + escapeHtml(r.SERVICENAME || r.SERVICE || '') + '</td>' +
-                            '  <td class="cwMono">' + escapeHtml(r.RESOURCEUID || r.RESOURCE || '') + '</td>' +
-                            '</tr>';
-                   }).join("") +
-          '      </tbody>' +
-          '    </table>' +
-          '  </div>' +
-          '</details>';
-      });
+            criticalTreeHtml +=
+              '<details class="cwCheck">' +
+              '  <summary class="cwCheckSummary" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--cw-border); cursor:pointer;">' +
+              '    <div class="cwCheckLeft" style="min-width:0; flex:1; padding-right:8px;">' +
+              '      <div class="cwCheckId" style="font-weight:700; color:var(--cw-text-main); font-size:14px; margin-bottom:4px;">' + escapeHtml(chkId) + '</div>' +
+              '      <div class="cwCheckTitle" title="' + escapeHtml(chkTitle) + '" style="font-size:14px; color:var(--cw-text-main);">' + escapeHtml(chkTitle) + '</div>' +
+              '    </div>' +
+              '    <div class="cwPills" style="flex-shrink:0; display:flex;">' +
+              '      <span class="cwPill cwFail" style="border-radius:12px; padding:4px 10px; font-weight:800; font-size:12px; background:#ef4444; color:#fff;">FAIL ' + checkFailCount + '</span>' +
+              '    </div>' +
+              '  </summary>' +
+              '  <div class="cwTableWrap" style="margin: 10px;">' +
+              '    <table class="cwTable">' +
+              '      <thead><tr><th>STATUS</th><th>SEV</th><th>SERVICE</th><th>RESOURCE</th></tr></thead>' +
+              '      <tbody>' +
+                       chkRows.slice(0, 100).map(function(r) {
+                         var fId = [r.CHECKID, r.RESOURCEUID, r.ACCOUNTUID].join("|");
+                         var ts = tState[fId];
+                         var isSuppressed = ts && (ts.status === 'ignored' || ts.status === 'fixed');
+                         var rowOpacity = isSuppressed ? 'opacity:0.5;' : '';
+                         var triageBadge = (ts && ts.status)
+                           ? '<span style="font-size:9px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:800; text-transform:uppercase;">' + escapeHtml(ts.status) + '</span>'
+                           : "";
+                         var statusClass = (String(r.STATUS).toUpperCase() === 'FAIL') ? 'cwStatusFail' : 'cwStatusPass';
 
-      criticalTreeHtml += '</div></div>';
-    }
+                         return '<tr class="cwRow" style="' + rowOpacity + '">' +
+                                '  <td><span class="' + statusClass + '">' + escapeHtml(r.STATUS) + '</span>' + triageBadge + '</td>' +
+                                '  <td>' + escapeHtml(r.SEVERITY) + '</td>' +
+                                '  <td>' + escapeHtml(r.SERVICENAME || r.SERVICE || '') + '</td>' +
+                                '  <td class="cwMono">' + escapeHtml(r.RESOURCEUID || r.RESOURCE || '') + '</td>' +
+                                '</tr>';
+                       }).join("") +
+              '      </tbody>' +
+              '    </table>' +
+              '  </div>' +
+              '</details>';
+          });
 
-  // -- COMPLIANCE FILTER LOGIC --
-  var defaultFrameworks = ["AWS-Foundational-Security-Best-Practices", "AWS-Foundational-Technical-Review", "AWS-Well-Architected-Framework-Security-Pillar", "PCI-3.2.1", "SOC2"];
-  var storedStr = localStorage.getItem("cwframeworkprefs");
-  var storedFwPref = storedStr ? JSON.parse(storedStr) : defaultFrameworks;
+          criticalTreeHtml += '</div></div>';
+        }
+
+        // -- COMPLIANCE FILTER LOGIC --
+        var defaultFrameworks = ["AWS-Foundational-Security-Best-Practices", "AWS-Foundational-Technical-Review", "AWS-Well-Architected-Framework-Security-Pillar", "PCI-3.2.1", "SOC2"];
+        var storedStr = localStorage.getItem("cwframeworkprefs");
+        var storedFwPref = storedStr ? JSON.parse(storedStr) : defaultFrameworks;
 
   var complianceHtml = "";
   if (fwList && fwList.length) {
@@ -1813,14 +1812,103 @@ host.insertAdjacentHTML("beforeend", complianceHtml);
     }
   }
 
-  // ------------------------------------------------------------------------
-// 10E. Failed critical risks block
+// ------------------------------------------------------------------------
+// 10E. Failed critical risks block (row-level 4-col grid)
 // ------------------------------------------------------------------------
 function renderFailedCriticalRisksBlock(allRows) {
-  const host = document.getElementById("viewSummaryInner") || document.getElementById("viewSummary");
+  const host =
+    document.getElementById("viewSummaryInner") ||
+    document.getElementById("viewSummary");
   if (!host) return;
 
+  const wrapper = document.getElementById("cwFailedCriticalWrapper");
+  if (!wrapper) return;
+
   const tState = getTriageState();
+
+  // base Critical Risks KPI card (first 25%)
+  const criticalSummaryCardHtml = (function () {
+    var totalChecks = allRows.length;
+    var counts = countStatuses(allRows);
+    var severities = countSeverities(allRows);
+    var criticalFail = severities.critical || 0;
+
+    var byService = {};
+    allRows.forEach(function (r) {
+      if (String(r.STATUS).toUpperCase() === "FAIL") {
+        var svc = String(r.SERVICE_NAME || r.SERVICE || "Unknown").trim();
+        var sev = norm(r.SEVERITY);
+        if (!byService[svc]) byService[svc] = { critical: 0, high: 0, totalFail: 0 };
+        byService[svc].totalFail++;
+        if (sev === "critical") byService[svc].critical++;
+        if (sev === "high") byService[svc].high++;
+      }
+    });
+
+    var criticalServices = Object.keys(byService)
+      .map(function (svc) {
+        return {
+          name: svc,
+          critical: byService[svc].critical,
+          high: byService[svc].high,
+          totalFail: byService[svc].totalFail
+        };
+      })
+      .filter(function (s) {
+        return s.critical > 0;
+      })
+      .sort(function (a, b) {
+        return (
+          b.critical * 100 +
+          b.high * 10 +
+          b.totalFail -
+          (a.critical * 100 + a.high * 10 + a.totalFail)
+        );
+      })
+      .slice(0, 5);
+
+    var criticalListHtml = "";
+    if (criticalServices.length) {
+      criticalListHtml =
+        '<ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 0.8rem; color: #881337;">' +
+        criticalServices
+          .map(function (s) {
+            return (
+              "<li style=\"margin-bottom:4px;\"><strong>" +
+              escapeHtml(s.name) +
+              "</strong> &ndash; " +
+              s.critical +
+              " critical</li>"
+            );
+          })
+          .join("") +
+        "</ul>";
+    }
+
+    if (criticalFail > 0) {
+      return (
+        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background:#fff1f2; border-color:#fecdd3;">' +
+        '  <div class="cwSummaryLabel" style="color:#be123c;">Critical Risks</div>' +
+        '  <div class="cwSummaryValue cwSummaryValue-critical" style="font-size:32px; margin:8px 0 4px;">' +
+        criticalFail +
+        "</div>" +
+        '  <div class="cwSummarySub" style="font-weight:600; color:#be123c; margin-bottom:8px;">Failing critical checks</div>' +
+        '  <div class="cwSummaryBody" style="font-size:0.8rem; color:#881337;">Concentrated in your top services:</div>' +
+        criticalListHtml +
+        "</div>"
+      );
+    }
+
+    return (
+      '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background:#f0fdf4; border-color:#bbf7d0;">' +
+      '  <div class="cwSummaryLabel" style="color:#15803d;">Critical Risks</div>' +
+      '  <div class="cwSummaryValue" style="font-size:32px; margin:8px 0 4px; color:#15803d;">0</div>' +
+      '  <div class="cwSummarySub" style="font-weight:600; color:#166534;">No critical failing checks!</div>' +
+      "</div>"
+    );
+  })();
+
+  // critical FAIL rows (unsuppressed)
   const criticalRows = allRows.filter(function (r) {
     const status = String(r.STATUS || "").toUpperCase();
     if (status !== "FAIL") return false;
@@ -1834,85 +1922,90 @@ function renderFailedCriticalRisksBlock(allRows) {
     return true;
   });
 
-  if (!criticalRows.length) return;
+  if (!criticalRows.length) {
+    wrapper.innerHTML =
+      '<div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px;">' +
+      '<div>' + criticalSummaryCardHtml + "</div>" +
+      "</div>";
+    return;
+  }
 
   const byCheck = groupMap(criticalRows, function (r) {
     return String(r.CHECK_ID || "UNKNOWN").trim();
   });
 
-const rowsHtml = Array.from(byCheck.entries()).map(function ([checkId, rows]) {
-  const first = rows[0] || {};
-  const title = String(first.CHECK_TITLE || checkId).trim();
-  const sev   = String(first.SEVERITY || "").trim();
-  const svc   = String(first.SERVICE_NAME || "").trim();
-  const count = rows.length;
+  const ruleCards = Array.from(byCheck.entries())
+    .sort(function (a, b) {
+      return b[1].length - a[1].length;
+    })
+    .map(function ([checkId, rows]) {
+      const first = rows[0] || {};
 
-  const tableRows = rows.slice(0, 50).map(function (r) {
-    const res = String(r.RESOURCE_UID || "").trim();
-    return (
-      '<tr>' +
-        '<td><span class="cwStatusFail">FAIL</span></td>' +
-        '<td>' + escapeHtml(String(r.SEVERITY || "")) + '</td>' +
-        '<td>' + escapeHtml(String(r.SERVICE_NAME || "")) + '</td>' +
-        '<td class="cwMono">' + escapeHtml(res) + '</td>' +
-      '</tr>'
-    );
-  }).join("");
+      const title = String(first.CHECK_TITLE || checkId).trim();
+      const svc = String(first.SERVICE_NAME || "").trim();
+      const region = String(first.REGION || "").trim();
+      const account = String(first.ACCOUNT_UID || "").trim();
+      const severity = String(first.SEVERITY || "").trim();
+      const section = String(first.CATEGORIES || "").trim();
+      const failCount = rows.length;
 
-  return (
-    '<details class="cwCheck">' +  // closed by default
-      '<summary class="cwCheckSummary" style="display:flex; align-items:center; gap:12px; padding:8px 0; cursor:pointer;">' +
-        '<div style="flex:1; min-width:0; padding-right:8px;">' +
-          '<div style="font-weight:700; font-size:13px; color:#0f172a; margin-bottom:2px;">' +
-            escapeHtml(checkId) +
-          '</div>' +
-          '<div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(title) + '">' +
-            escapeHtml(title) +
-          '</div>' +
-        '</div>' +
-        '<div style="display:flex; align-items:center; gap:16px; font-size:11px; color:#64748b; flex-shrink:0;">' +
-          '<div style="width:70px;">' +
-            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Sev</div>' +
-            escapeHtml(sev) +
-          '</div>' +
-          '<div style="width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
-            '<div style="font-weight:700; text-transform:uppercase; color:#94a3b8; font-size:10px;">Service</div>' +
-            escapeHtml(svc) +
-          '</div>' +
-        '</div>' +
-        '<div style="margin-left:auto; padding-left:12px; flex-shrink:0;">' +
-          '<span style="display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:999px; background:#ef4444; color:#fff; font-size:11px; font-weight:800;">' +
-            'FAIL ' + count +
-          '</span>' +
-        '</div>' +
-      '</summary>' +
-      '<div class="cwTableWrap" style="margin:8px 0 4px;">' +
-        '<table class="cwTable">' +
-          '<thead>' +
-            '<tr>' +
-              '<th>STATUS</th>' +
-              '<th>SEV</th>' +
-              '<th>SERVICE</th>' +
-              '<th>RESOURCE</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' +
-            tableRows +
-          '</tbody>' +
-        '</table>' +
-      '</div>' +
-    '</details>'
-  );
-}).join("");
+      const listHtml = rows.slice(0, 3).map(function (r) {
+        const res = String(r.RESOURCE_UID || "").trim();
+        const reg = String(r.REGION || "").trim();
 
-const blockHtml =
-  '<div class="card" style="padding:10px 14px 6px; border-radius:10px; border:2px solid #ef4444; box-shadow:0 4px 10px rgba(15,23,42,0.06);">' +
-    '<div style="font-weight:900; font-size:15px; color:#0f172a; margin-bottom:8px;">Failed critical risks</div>' +
-    rowsHtml +
-  '</div>';
+        return (
+          '<li style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; padding:4px 0; border-top:1px solid #fee2e2;">' +
+            '<div style="flex:1; min-width:0;">' +
+              '<div style="font-size:11px; color:#7f1d1d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(res) + '">' +
+                escapeHtml(res) +
+              "</div>" +
+            "</div>" +
+            '<div style="font-size:10px; color:#9f1239; white-space:nowrap;">' +
+              escapeHtml(reg) +
+            "</div>" +
+          "</li>"
+        );
+      }).join("");
 
-const wrapper = document.getElementById("cwFailedCriticalWrapper") || host;
-wrapper.innerHTML = blockHtml;
+      return (
+        '<div>' +
+          '<article class="cwSummaryCard" style="display:flex; flex-direction:column; background:#fff1f2; border-color:#fecdd3; padding:10px 10px 8px;">' +
+            '<header style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">' +
+              '<div style="min-width:0; flex:1;">' +
+                '<div class="cwSummaryLabel" style="color:#be123c; margin-bottom:2px;">Critical rule</div>' +
+                '<div style="font-size:12px; font-weight:800; color:#b91c1c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(checkId) + '">' +
+                  escapeHtml(checkId) +
+                "</div>" +
+                '<div style="font-size:10px; color:#9f1239; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(title) + '">' +
+                  escapeHtml(title) +
+                "</div>" +
+              "</div>" +
+              '<div style="text-align:right; flex-shrink:0;">' +
+                '<div style="font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#fb7185;">Open fails</div>' +
+                '<div style="font-size:16px; font-weight:900; color:#b91c1c;">' + failCount + "</div>" +
+              "</div>" +
+            "</header>" +
+            '<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; font-size:9px; color:#9f1239;">' +
+              (severity ? '<span>Sev: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(severity) + "</span></span>" : "") +
+              (section ? '<span>Section: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(section) + "</span></span>" : "") +
+              (svc ? '<span>Svc: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(svc) + "</span></span>" : "") +
+              (region ? '<span>Region: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(region) + "</span></span>" : "") +
+              (account ? '<span>Acct: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(account) + "</span></span>" : "") +
+            "</div>" +
+            '<ul style="list-style:none; margin:2px 0 0; padding:0; font-size:11px;">' +
+              listHtml +
+            "</ul>" +
+          "</article>" +
+        "</div>"
+      );
+    }).join("");
+
+  // Full row grid: first col = Critical Risks, remaining cols = rule cards
+  wrapper.innerHTML =
+    '<div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; align-items:flex-start;">' +
+      '<div>' + criticalSummaryCardHtml + "</div>" +
+      ruleCards +
+    "</div>";
 }
   // ------------------------------------------------------------------------
   // 11. Auto-start & Exports
