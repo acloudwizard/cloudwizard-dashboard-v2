@@ -1371,14 +1371,22 @@
       .slice(0, 5);
       
     var criticalListHtml = "";
-    if (criticalServices.length) {
-      criticalListHtml = 
-        '<ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 0.8rem; color: #881337;">' +
-        criticalServices.map(function (s) {
-          return '<li style="margin-bottom:4px;"><strong>' + s.name + '</strong> &ndash; ' + s.critical + ' critical</li>';
-        }).join("") +
-        '</ul>';
-    }
+   if (criticalServices.length) {
+  criticalListHtml =
+    '<ul style="margin:8px 0 0 0; padding-left:18px; font-size:0.78rem;'
+  + ' color:#fef9c3; /* light yellow for contrast */">'
+  + criticalServices
+      .map(function (s) {
+        return (
+          '<li style="margin-bottom:3px;">'
+          + '<span style="font-weight:700; color:#ffffff;">' + escapeHtml(s.name) + '</span>'
+          + ' – ' + s.critical + ' critical'
+          + '</li>'
+        );
+      })
+      .join('')
+  + '</ul>';
+}
     
     criticalSummaryHtml = `
       <div class="cwSummaryCard" style="display:flex; flex-direction:column; background: #fff1f2; border-color: #fecdd3;">
@@ -1894,19 +1902,52 @@ function renderFailedCriticalRisksBlock(allRows) {
         "</ul>";
     }
 
-    if (criticalFail > 0) {
-      return (
-        '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background:#fff1f2; border-color:#fecdd3;">' +
-        '  <div class="cwSummaryLabel" style="color:#be123c;">Critical Risks</div>' +
-        '  <div class="cwSummaryValue cwSummaryValue-critical" style="font-size:32px; margin:8px 0 4px;">' +
-        criticalFail +
-        "</div>" +
-        '  <div class="cwSummarySub" style="font-weight:600; color:#be123c; margin-bottom:8px;\">Failing critical checks</div>' +
-        '  <div class="cwSummaryBody" style="font-size:0.8rem; color: #4b5563;">Concentrated in your top services:</div>' +
-        criticalListHtml +
-        "</div>"
-      );
-    }
+if (criticalFail > 0) {
+  return (
+    '<div class="cwSummaryCard" style="' +
+      'display:flex; flex-direction:column; justify-content:space-between;' +
+      'border-radius:14px; border:1px solid rgba(248,113,113,0.7);' +
+      'background:' +
+        'radial-gradient(circle at top left, rgba(254,226,226,0.35), transparent 55%),' +
+        'radial-gradient(circle at bottom right, rgba(248,113,113,0.45), transparent 60%),' +
+        '#7f1d1d;' +
+      'box-shadow:0 18px 35px -18px rgba(127,29,29,0.9);' +
+      'padding:16px 18px; color:#fee2e2;' +
+    '">' +
+      // Label
+      '<div style="font-size:11px; text-transform:uppercase; letter-spacing:0.16em;' +
+                 'font-weight:800; color:#fecaca; margin-bottom:8px;">' +
+        'Critical Risks' +
+      '</div>' +
+
+      // Big number + sublabel
+      '<div style="display:flex; align-items:flex-end; gap:8px; margin-bottom:4px;">' +
+        '<div class="cwSummaryValue cwSummaryValue-critical" ' +
+             'style="font-size:34px; line-height:1; font-weight:900; color:#fef2f2;">' +
+          criticalFail +
+        '</div>' +
+        '<div class="cwSummarySub" ' +
+             'style="font-size:12px; font-weight:600; color:#fecaca;">' +
+          'Failing critical checks' +
+        '</div>' +
+      '</div>' +
+
+      // Body text + dynamic list
+      '<div class="cwSummaryBody" ' +
+           'style="font-size:0.8rem; line-height:1.5; color:#fee2e2; opacity:0.96;">' +
+        'Concentrated in your top services:' +
+      '</div>' +
+      criticalListHtml +
+
+      // Advisory copy at bottom
+      '<div class="cwSummaryBody" ' +
+           'style="font-size:0.78rem; line-height:1.6; color:#fee2e2; opacity:0.9; margin-top:10px;">' +
+        'We recommend addressing the critical and high-severity findings within the next 7 days to minimize security exposure. ' +
+        'CloudWizard can help you remediate these issues quickly with our managed security service.' +
+      '</div>' +
+    '</div>'
+  );
+}
 
     return (
       '<div class="cwSummaryCard" style="display:flex; flex-direction:column; background:#f0fdf4; border-color:#bbf7d0;">' +
