@@ -1598,7 +1598,7 @@
         '      <button id="fwFilterClear" class="cwBtn" style="padding:4px 8px; font-size:10px;">Clear All</button>' +
         '      <button id="fwFilterAll" class="cwBtn" style="padding:4px 8px; font-size:10px;">Select All</button>' +
         '    </div>' +
-        '    <div class="cwFwFilterList">' +
+        '    <div class="cwFwFilterList" style="display:flex; flex-direction:column; gap:4px; padding-top:4px;">' +
                filterOptionsHtml +
         '    </div>' +
         '  </div>' +
@@ -1660,19 +1660,20 @@
         );
       })();
 
-      var cardsHtml = fwList.map(function (fw) {
+       var cardsHtml = fwList.map(function (fw) {
         var passRateFw = typeof fw.passRate === "number" ? fw.passRate : 0;
         var postureClass = passRateFw >= 90 ? "cwSummaryPill-good" : passRateFw >= 70 ? "cwSummaryPill-fair" : "cwSummaryPill-warn";
         var postureLabelFw = passRateFw >= 90 ? "Strong" : passRateFw >= 70 ? "Fair" : "Needs attention";
         var failLabel = (fw.highFail + fw.criticalFail === 0) 
           ? "No high or critical failing controls" 
           : fw.criticalFail + " critical, " + fw.highFail + " high failing controls";
-        
-        var displayStyle = storedFwPref.includes(fw.id) ? "block" : "none";
+
+        var isVisible = storedFwPref.includes(fw.id);
+        var wrapperDisplay = isVisible ? "block" : "none";
 
         return '' +
-          '<div style="display:' + displayStyle + ';">' +
-          '  <article class="cwSummaryCard-fw" data-fw-id="' + fw.id + '" ' +
+          '<div class="cwFwItem" data-fw-id="' + fw.id + '" style="display:' + wrapperDisplay + ';">' +
+          '  <article class="cwSummaryCard-fw" ' +
           '           style="display:flex; flex-direction:column; height:100%; justify-content:space-between;">' +
           '    <header class="cwSummaryCardHead">' +
           '      <h3 class="cwSummaryCardTitle" title="' + fw.name + '">' + fw.name + '</h3>' +
@@ -1750,20 +1751,18 @@
 
     function applyFwFilter() {
       var checks = host.querySelectorAll(".cwFwCheckbox input[type='checkbox']");
-      var cards = host.querySelectorAll(".cwSummaryCard-fw");
-      
+      var items  = host.querySelectorAll(".cwFwItem");
+
       var selected = [];
       for (var i = 0; i < checks.length; i++) {
-        if (checks[i].checked) {
-          selected.push(checks[i].value);
-        }
+        if (checks[i].checked) selected.push(checks[i].value);
       }
-      
+
       localStorage.setItem("cwframeworkprefs", JSON.stringify(selected));
 
-      for (var j = 0; j < cards.length; j++) {
-        var id = cards[j].getAttribute("data-fw-id");
-        cards[j].style.display = (selected.indexOf(id) > -1) ? "flex" : "none";
+      for (var j = 0; j < items.length; j++) {
+        var id = items[j].getAttribute("data-fw-id");
+        items[j].style.display = (selected.indexOf(id) > -1) ? "block" : "none";
       }
     }
 
