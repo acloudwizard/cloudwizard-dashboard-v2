@@ -1956,40 +1956,31 @@ function renderFailedCriticalRisksBlock(allRows) {
         'style="display:flex; flex-direction:column; background:#ffffff; border:1px solid #fecaca; box-shadow:none; padding:10px 10px 8px;">' +
 
           // header
-          '<header style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:6px;">' +
-            '<div style="min-width:0; flex:1;">' +
-              '<div style="font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#6b7280; margin-bottom:2px;">Critical rule</div>' +
-              // rule id
-              '<div style="font-size:11px; font-weight:700; color:#111827; margin-bottom:4px; word-break:break-word;">' +
-                escapeHtml(checkId) +
-              '</div>' +
-              // Description
-              (desc
-                ? '<div style="font-size:10px; color:#4b5563; line-height:1.4; margin-bottom:4px; max-height:5.6em; overflow:hidden;">' +
-                    '<span style="font-weight:600; color:#111827; margin-right:4px;">Description</span>' +
-                    escapeHtml(desc) +
-                  '</div>'
-                : ''
-              ) +
-              // Risk
-              (risk
-                ? '<div style="font-size:10px; color:#4b5563; line-height:1.4; max-height:5.6em; overflow:hidden;">' +
-                    '<span style="font-weight:600; color:#111827; margin-right:4px;">Risk</span>' +
-                    escapeHtml(risk) +
-                  '</div>'
-                : ''
-              ) +
-            '</div>' +
-            '<div style="text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' +
-              '<button type="button" ' +
-                'style="border:none; padding:3px 8px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:default;">' +
-                'CRITICAL FAILURE' +
-              '</button>' +
-              '<div style="font-size:11px; color:#111827;"><span style="font-weight:700; color:#b91c1c;">' +
-                failCount +
-              '</span> open</div>' +
-            '</div>' +
+          '<header style="margin-bottom:8px; text-align:center;">' +
+            '<button type="button" ' +
+              'style="border:none; padding:4px 10px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:default; display:inline-flex; align-items:center; justify-content:center; gap:4px;">' +
+              '<span>CRITICAL FAILURE</span>' +
+              '<span>(' + failCount + ')</span>' +
+            '</button>' +
           '</header>' +
+
+          // full-width Description + Risk
+          '<div style="font-size:10px; color:#4b5563; line-height:1.4; margin-bottom:6px; text-align:left;">' +
+            (desc
+              ? '<div style="margin-bottom:4px;">' +
+                  '<span style="font-weight:600; color:#111827; margin-right:4px;">Description</span>' +
+                  escapeHtml(desc) +
+                '</div>'
+              : ''
+            ) +
+            (risk
+              ? '<div>' +
+                  '<span style="font-weight:600; color:#111827; margin-right:4px;">Risk</span>' +
+                  escapeHtml(risk) +
+                '</div>'
+              : ''
+            ) +
+          '</div>' +
 
           // meta row
           '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size:9px; color:#4b5563;">' +
@@ -2000,15 +1991,14 @@ function renderFailedCriticalRisksBlock(allRows) {
             (account ? '<span>Acct: <span style="font-weight:600; color:#111827;">' + escapeHtml(account) + '</span></span>' : '') +
           '</div>' +
 
-          // CTA button instead of list
-          '<div style="margin-top:6px;">' +
-            '<button type="button" ' +
-              'style="width:100%; padding:6px 10px; border-radius:999px; border:1px solid #fecaca; background:#fff7f7;' +
-                     ' font-size:11px; font-weight:600; color:#6b7280; cursor:default; display:inline-flex; align-items:center; justify-content:center; gap:6px;">' +
-              '<span>View critical failures</span>' +
-              '<span style="font-size:10px; color:#b91c1c;">(' + failCount + ')</span>' +
-            '</button>' +
-          '</div>' +
+// CTA button instead of list
+'<div style="margin-top:8px; display:flex; justify-content:center;">' +
+  '<button type="button" ' +
+    'style="padding:7px 14px; border-radius:999px; border:none; background:#b91c1c;' +
+           ' font-size:11px; font-weight:600; color:#ffffff; cursor:default; display:inline-flex; align-items:center; justify-content:center;">' +
+    'View Critical Failures' +
+  '</button>' +
+'</div>' +
 
         '</article>' +
       '</div>'
