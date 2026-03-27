@@ -1813,7 +1813,7 @@ host.insertAdjacentHTML("beforeend", complianceHtml);
   }
 
 // ------------------------------------------------------------------------
-// 10E. Failed critical risks block (row-level 4-col grid)
+// 10E. Failed critical risks block (row-level 4-col grid, softer UI)
 // ------------------------------------------------------------------------
 function renderFailedCriticalRisksBlock(allRows) {
   const host =
@@ -1826,10 +1826,8 @@ function renderFailedCriticalRisksBlock(allRows) {
 
   const tState = getTriageState();
 
-  // base Critical Risks KPI card (first 25%)
+  // --- Critical Risks KPI card (first 25%) – unchanged look ---
   const criticalSummaryCardHtml = (function () {
-    var totalChecks = allRows.length;
-    var counts = countStatuses(allRows);
     var severities = countSeverities(allRows);
     var criticalFail = severities.critical || 0;
 
@@ -1892,8 +1890,8 @@ function renderFailedCriticalRisksBlock(allRows) {
         '  <div class="cwSummaryValue cwSummaryValue-critical" style="font-size:32px; margin:8px 0 4px;">' +
         criticalFail +
         "</div>" +
-        '  <div class="cwSummarySub" style="font-weight:600; color:#be123c; margin-bottom:8px;">Failing critical checks</div>' +
-        '  <div class="cwSummaryBody" style="font-size:0.8rem; color:#881337;">Concentrated in your top services:</div>' +
+        '  <div class="cwSummarySub" style="font-weight:600; color:#be123c; margin-bottom:8px;\">Failing critical checks</div>' +
+        '  <div class="cwSummaryBody" style="font-size:0.8rem; color: #4b5563;">Concentrated in your top services:</div>' +
         criticalListHtml +
         "</div>"
       );
@@ -1908,7 +1906,7 @@ function renderFailedCriticalRisksBlock(allRows) {
     );
   })();
 
-  // critical FAIL rows (unsuppressed)
+  // --- critical FAIL rows (unsuppressed) ---
   const criticalRows = allRows.filter(function (r) {
     const status = String(r.STATUS || "").toUpperCase();
     if (status !== "FAIL") return false;
@@ -1938,9 +1936,12 @@ function renderFailedCriticalRisksBlock(allRows) {
     .sort(function (a, b) {
       return b[1].length - a[1].length;
     })
+    .slice(0, 12)
     .map(function ([checkId, rows]) {
       const first = rows[0] || {};
 
+      const desc = String(first.DESCRIPTION || "").trim();
+      const risk = String(first.RISK || "").trim();
       const title = String(first.CHECK_TITLE || checkId).trim();
       const svc = String(first.SERVICE_NAME || "").trim();
       const region = String(first.REGION || "").trim();
@@ -1949,57 +1950,70 @@ function renderFailedCriticalRisksBlock(allRows) {
       const section = String(first.CATEGORIES || "").trim();
       const failCount = rows.length;
 
-      const listHtml = rows.slice(0, 3).map(function (r) {
-        const res = String(r.RESOURCE_UID || "").trim();
-        const reg = String(r.REGION || "").trim();
+    return (
+      '<div>' +
+        '<article class="cwSummaryCard" ' +
+        'style="display:flex; flex-direction:column; background:#ffffff; border:1px solid #fecaca; box-shadow:none; padding:10px 10px 8px;">' +
 
-        return (
-          '<li style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; padding:4px 0; border-top:1px solid #fee2e2;">' +
-            '<div style="flex:1; min-width:0;">' +
-              '<div style="font-size:11px; color:#7f1d1d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(res) + '">' +
-                escapeHtml(res) +
-              "</div>" +
-            "</div>" +
-            '<div style="font-size:10px; color:#9f1239; white-space:nowrap;">' +
-              escapeHtml(reg) +
-            "</div>" +
-          "</li>"
-        );
-      }).join("");
+          // header
+          '<header style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:6px;">' +
+            '<div style="min-width:0; flex:1;">' +
+              '<div style="font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#6b7280; margin-bottom:2px;">Critical rule</div>' +
+              // rule id
+              '<div style="font-size:11px; font-weight:700; color:#111827; margin-bottom:4px; word-break:break-word;">' +
+                escapeHtml(checkId) +
+              '</div>' +
+              // Description
+              (desc
+                ? '<div style="font-size:10px; color:#4b5563; line-height:1.4; margin-bottom:4px; max-height:5.6em; overflow:hidden;">' +
+                    '<span style="font-weight:600; color:#111827; margin-right:4px;">Description</span>' +
+                    escapeHtml(desc) +
+                  '</div>'
+                : ''
+              ) +
+              // Risk
+              (risk
+                ? '<div style="font-size:10px; color:#4b5563; line-height:1.4; max-height:5.6em; overflow:hidden;">' +
+                    '<span style="font-weight:600; color:#111827; margin-right:4px;">Risk</span>' +
+                    escapeHtml(risk) +
+                  '</div>'
+                : ''
+              ) +
+            '</div>' +
+            '<div style="text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' +
+              '<button type="button" ' +
+                'style="border:none; padding:3px 8px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:default;">' +
+                'CRITICAL FAILURE' +
+              '</button>' +
+              '<div style="font-size:11px; color:#111827;"><span style="font-weight:700; color:#b91c1c;">' +
+                failCount +
+              '</span> open</div>' +
+            '</div>' +
+          '</header>' +
 
-      return (
-        '<div>' +
-          '<article class="cwSummaryCard" style="display:flex; flex-direction:column; background:#fff1f2; border-color:#fecdd3; padding:10px 10px 8px;">' +
-            '<header style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">' +
-              '<div style="min-width:0; flex:1;">' +
-                '<div class="cwSummaryLabel" style="color:#be123c; margin-bottom:2px;">Critical rule</div>' +
-                '<div style="font-size:12px; font-weight:800; color:#b91c1c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(checkId) + '">' +
-                  escapeHtml(checkId) +
-                "</div>" +
-                '<div style="font-size:10px; color:#9f1239; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(title) + '">' +
-                  escapeHtml(title) +
-                "</div>" +
-              "</div>" +
-              '<div style="text-align:right; flex-shrink:0;">' +
-                '<div style="font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#fb7185;">Open fails</div>' +
-                '<div style="font-size:16px; font-weight:900; color:#b91c1c;">' + failCount + "</div>" +
-              "</div>" +
-            "</header>" +
-            '<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; font-size:9px; color:#9f1239;">' +
-              (severity ? '<span>Sev: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(severity) + "</span></span>" : "") +
-              (section ? '<span>Section: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(section) + "</span></span>" : "") +
-              (svc ? '<span>Svc: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(svc) + "</span></span>" : "") +
-              (region ? '<span>Region: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(region) + "</span></span>" : "") +
-              (account ? '<span>Acct: <span style="font-weight:600; color:#0f172a;">' + escapeHtml(account) + "</span></span>" : "") +
-            "</div>" +
-            '<ul style="list-style:none; margin:2px 0 0; padding:0; font-size:11px;">' +
-              listHtml +
-            "</ul>" +
-          "</article>" +
-        "</div>"
-      );
-    }).join("");
+          // meta row
+          '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; font-size:9px; color:#4b5563;">' +
+            (severity ? '<span>Sev: <span style="font-weight:600; color:#b91c1c;">' + escapeHtml(severity) + '</span></span>' : '') +
+            (section ? '<span>Section: <span style="font-weight:600; color:#111827;">' + escapeHtml(section) + '</span></span>' : '') +
+            (svc ? '<span>Svc: <span style="font-weight:600; color:#111827;">' + escapeHtml(svc) + '</span></span>' : '') +
+            (region ? '<span>Region: <span style="font-weight:600; color:#111827;">' + escapeHtml(region) + '</span></span>' : '') +
+            (account ? '<span>Acct: <span style="font-weight:600; color:#111827;">' + escapeHtml(account) + '</span></span>' : '') +
+          '</div>' +
 
+          // CTA button instead of list
+          '<div style="margin-top:6px;">' +
+            '<button type="button" ' +
+              'style="width:100%; padding:6px 10px; border-radius:999px; border:1px solid #fecaca; background:#fff7f7;' +
+                     ' font-size:11px; font-weight:600; color:#6b7280; cursor:default; display:inline-flex; align-items:center; justify-content:center; gap:6px;">' +
+              '<span>View critical failures</span>' +
+              '<span style="font-size:10px; color:#b91c1c;">(' + failCount + ')</span>' +
+            '</button>' +
+          '</div>' +
+
+        '</article>' +
+      '</div>'
+    );
+  }).join("");
   // Full row grid: first col = Critical Risks, remaining cols = rule cards
   wrapper.innerHTML =
     '<div style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; align-items:flex-start;">' +
