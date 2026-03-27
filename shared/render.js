@@ -1418,9 +1418,17 @@
       '    <div style="flex:1; position:relative; min-height:220px; margin-top:10px;"><canvas id="sumRegionBar"></canvas></div>' +
       '  </div>' +
       '</div>' +
-      // SECOND ROW: container only; content filled by renderFailedCriticalRisksBlock
-      '<div id="cwFailedCriticalWrapper" ' +
-      '     style="margin-top:12px;"></div>';
+// SECOND ROW: Critical Risks heading + container
+'<div style="margin-top:24px;">' +
+  '<div style="margin:0 auto 12px auto; max-width:960px;">' +
+    '<h2 class="cwSectionTitleCentered" ' +
+        'style="margin:0 0 6px 0; text-align:center; letter-spacing:0.06em; text-transform:uppercase;">' +
+      'Critical Risks' +
+    '</h2>' +
+    '<div style="height:2px; width:80px; margin:0 auto; background:var(--cw-border); border-radius:999px;"></div>' +
+  '</div>' +
+  '<div id="cwFailedCriticalWrapper"></div>' +
+'</div>';
 
   // ------------------------------------------------------------------------
 // 10F. Top failing services cards
@@ -1613,12 +1621,15 @@ if (sortedAllServices.length > 0) {
       `;
     }).join("");
 
-    complianceHtml = `
-      <div class="cwSummaryCard" style="margin-top:16px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">
-          <h2 class="cwSectionTitleCentered" style="border:none; padding:0; margin:0;">Compliance Snapshot</h2>
-          ${filterUIHtml}
-        </div>
+complianceHtml = `
+  <div class="cwSummaryCard" style="margin-top:24px; border-radius:14px; background: transparent; border: none; box-shadow: none; padding: 0;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--cw-border); padding-bottom: 12px; margin-bottom: 16px;">
+      <h2 class="cwSectionTitleCentered"
+          style="border:none; padding:0; margin:0; letter-spacing:0.06em; text-transform:uppercase; text-align:center;">
+        Compliance Snapshot
+      </h2>
+      ${filterUIHtml}
+    </div>
         <div class="cwSummaryGrid-fw" id="fwGridContainer">
           ${cardsHtml}
         </div>
@@ -1628,11 +1639,11 @@ if (sortedAllServices.length > 0) {
     var failingServicesCount = Object.keys(byService).length;
 
 host.innerHTML =
-  '<div class="cwSummaryHeader">' +
-    '<div class="cwSummaryHeader-main">' +
-      '<div class="cwSummaryHeader-title">Security &amp; Compliance Snapshot</div>' +
-      '<div class="cwSummaryHeader-sub">High-level view of your AWS risks and framework coverage.</div>' +
-    '</div>' +
+  '<div class="cwSummaryHeader" style="margin-bottom:12px;">' +
+    '<h2 class="cwSectionTitleCentered" ' +
+        'style="margin:0; text-align:center; letter-spacing:0.06em; text-transform:uppercase;">' +
+      'Security Snapshot' +
+    '</h2>' +
   '</div>' +
   chartsHtml;
 
