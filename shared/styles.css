@@ -675,3 +675,35 @@ body {
 .cwFwCheckbox input {
   cursor: pointer;
 }
+
+.cwSummaryCard-critical {
+  display:flex;
+  flex-direction:column;
+  background:#b91c1c;
+  border-color:#fecdd3;
+  color:#ffffff;
+}
+
+.cwSummaryCard-critical .cwSummaryLabel,
+.cwSummaryCard-critical .cwSummarySub,
+.cwSummaryCard-critical .cwSummaryBody {
+  color:#fffbeb;
+}
+
+.cwSummaryCard-critical .cwSummaryValue-critical {
+  color:#ffffff;
+}
+
+.cwSummaryCard-critical .cwCriticalList {
+  margin:8px 0 0 0;
+  padding-left:1.1rem;
+  font-size:0.8rem;
+  list-style-type:disc;
+  list-style-position:inside;
+  color:#ffffff;
+}
+
+.cwSummaryCard-critical .cwCriticalList li {
+  margin-bottom:3px;
+  color:#ffffff;
+}
