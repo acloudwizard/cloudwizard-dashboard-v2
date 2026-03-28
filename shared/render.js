@@ -1647,7 +1647,7 @@ if (criticalFail > 0) {
                        'font-weight:800; color:#a7f3d0; margin-bottom:6px; text-align:center;">' +
               'Compliance Summary' +
             '</div>' +
-            '<div style="display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; max-height:140px; overflow-y:auto;">' +
+            '<div style="display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; max-height:120px; overflow-y:auto; padding-right:10px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.3) transparent;">' +
               fwSummaries.map(function (f) {
                 return '' +
                   '<div style="display:flex; justify-content:space-between; align-items:center;">' +
